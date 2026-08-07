@@ -16,6 +16,7 @@ from gamestringer.core.base_engine import BaseEngine, TransUnit, validate_smart_
 from gamestringer.core.xliff_exporter import export_xliff, parse_xliff
 from gamestringer.core.backup import create_backup
 from gamestringer.core.logger import logger
+from gamestringer.core.addressables_crc import auto_update_addressables_crc
 
 try:
     import UnityPy
@@ -176,6 +177,7 @@ class UnityMonoEngine(BaseEngine):
 
         patched_count = 0
         backups_created = 0
+        modified_target_files = []
 
         for full_path, rel_path in asset_files:
             # Create backup if patching in-place
@@ -242,9 +244,13 @@ class UnityMonoEngine(BaseEngine):
                 os.makedirs(os.path.dirname(os.path.abspath(target_file)), exist_ok=True)
                 with open(target_file, "wb") as f:
                     f.write(env.file.save())
+                modified_target_files.append(target_file)
+
+        crc_msgs = auto_update_addressables_crc(input_path, modified_target_files)
+        crc_info = (" " + " | ".join(crc_msgs)) if crc_msgs else ""
 
         backup_msg = f"Backups created: {backups_created}" if backups_created > 0 else "Separate output folder target (original files untouched)"
-        return f"Successfully patched {patched_count} Unity asset text element(s) across {len(asset_files)} file(s). {backup_msg}."
+        return f"Successfully patched {patched_count} Unity asset text element(s) across {len(asset_files)} file(s). {backup_msg}.{crc_info}"
 
     # ─────────────────────────────────────────────────────────────
     # INTERNAL HELPERS

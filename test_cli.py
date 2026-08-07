@@ -3,7 +3,8 @@ Integration and Unit Test Suite for GameStringer CLI.
 
 Tests XLIFF Exporter/Parser, NFC Normalization, Dry-Run Mode, Corrupt File Handling,
 Smart String Token Validation, Engine Detection/Extract/Patch for all 5 engines,
-Validation Exit Codes, Update/Diff Merging, and Parallel Batch Mode.
+Validation Exit Codes, Update/Diff Merging, Parallel Batch Mode, Quote Checker,
+Hungarian Font Checker, and Addressables CRC Catalog Fixer.
 """
 
 import sys
@@ -15,9 +16,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tempfile
 import json
 import struct
+import zlib
 from gamestringer.core.base_engine import TransUnit
 from gamestringer.core.xliff_exporter import export_xliff, parse_xliff, validate_xliff, update_xliff
 from gamestringer.core.batch import run_batch, auto_detect_engine
+from gamestringer.core.quote_checker import check_xliff_quotes
+from gamestringer.core.font_checker import check_game_fonts
+from gamestringer.core.addressables_crc import calculate_crc32, fix_catalog_crc_command, auto_update_addressables_crc
 from gamestringer.cli import ENGINE_REGISTRY, main
 from gamestringer.engines.renpy import RenpyEngine
 from gamestringer.engines.unreal import UnrealEngine
@@ -330,6 +335,78 @@ def test_batch_mode():
     print("[PASS] Batch Mode passed!")
 
 
+def test_quote_checker():
+    print("Testing Feature 1 — Quote Consistency Checker...")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        xliff_path = os.path.join(tmpdir, "quotes.xliff")
+        json_report = os.path.join(tmpdir, "quote_report.json")
+
+        q = '"'
+        units = [
+            TransUnit(id="u1", source=f"{q}Hello World!{q}", target=f"{q}Ciao Mondo!{q}"),
+            TransUnit(id="u2", source=f"{q}Hello there!{q}", target="„Szia!"),
+            TransUnit(id="u3", source=f"{q}Welcome!{q}", target="Üdvözlet!"),
+            TransUnit(id="u4", source=f"{q}Play Game{q}", target="„Játék”"),
+        ]
+        export_xliff(units, xliff_path)
+
+        res = check_xliff_quotes(xliff_path, json_report)
+        assert res["total_checked"] == 4
+        assert res["issues_found"] == 3
+
+        issue_types = [i["issue"] for i in res["issues"]]
+        assert "unbalanced" in issue_types
+        assert "missing_quotes" in issue_types
+        assert "mismatched_style" in issue_types
+        assert os.path.exists(json_report)
+
+    print("[PASS] Feature 1 — Quote Consistency Checker passed!")
+
+
+def test_font_checker():
+    print("Testing Feature 2 — Hungarian Font Checker...")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Non-unity engine
+        res_renpy = check_game_fonts(tmpdir, "renpy")
+        assert res_renpy["status"] == "unsupported"
+
+        # Unity engine warning
+        res_unity = check_game_fonts(tmpdir, "unity")
+        assert res_unity["status"] == "warning"
+        assert "Recommendation" in res_unity["message"]
+
+    print("[PASS] Feature 2 — Hungarian Font Checker passed!")
+
+
+def test_fix_catalog_crc():
+    print("Testing Feature 3 — Addressables CRC Fixer...")
+    with tempfile.TemporaryDirectory() as tmpdir:
+        bundle_file = os.path.join(tmpdir, "data.bundle")
+        with open(bundle_file, "wb") as f:
+            f.write(b"MockAssetBundleData_12345")
+
+        bundle_crc = calculate_crc32(bundle_file)
+        assert bundle_crc > 0
+
+        catalog_path = os.path.join(tmpdir, "catalog.json")
+        cat_data = {
+            "m_InternalIds": ["data.bundle"],
+            "m_Crcs": {"data.bundle": 99999}
+        }
+        with open(catalog_path, "w", encoding="utf-8") as f:
+            json.dump(cat_data, f)
+
+        res = fix_catalog_crc_command(tmpdir)
+        assert res["catalog_found"] is True
+        assert "data.bundle" in res["updated_files"]
+
+        with open(catalog_path, "r", encoding="utf-8") as f:
+            updated_data = json.load(f)
+            assert updated_data["m_Crcs"]["data.bundle"] == bundle_crc
+
+    print("[PASS] Feature 3 — Addressables CRC Fixer passed!")
+
+
 if __name__ == "__main__":
     test_xliff()
     test_dry_run_extract()
@@ -343,4 +420,7 @@ if __name__ == "__main__":
     test_validate_mode()
     test_update_mode()
     test_batch_mode()
+    test_quote_checker()
+    test_font_checker()
+    test_fix_catalog_crc()
     print("\nALL INFRASTRUCTURE, ENGINE & ROBUSTNESS TESTS PASSED SUCCESSFULLY!")

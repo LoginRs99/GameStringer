@@ -21,6 +21,9 @@ from gamestringer.core.logger import setup_logger, logger
 from gamestringer.core.base_engine import BaseEngine
 from gamestringer.core.xliff_exporter import parse_xliff, validate_xliff, update_xliff
 from gamestringer.core.batch import run_batch, auto_detect_engine
+from gamestringer.core.quote_checker import check_xliff_quotes
+from gamestringer.core.font_checker import check_game_fonts
+from gamestringer.core.addressables_crc import fix_catalog_crc_command
 from gamestringer.engines.renpy import RenpyEngine
 from gamestringer.engines.unreal import UnrealEngine
 from gamestringer.engines.unity_mono import UnityMonoEngine
@@ -213,6 +216,49 @@ try:
         for name, eng in ENGINE_REGISTRY.items():
             click.echo(f"  • {name:<10} - {eng.description}")
 
+    @main.command(name="check-quotes")
+    @click.option("--xliff", "-x", "xliff_path", required=True, type=click.Path(exists=True), help="Input XLIFF file path")
+    @click.option("--output", "-o", "output_path", type=click.Path(), help="Optional JSON output report path")
+    def check_quotes_cmd(xliff_path: str, output_path: str):
+        """Check XLIFF file for quote style mismatches, font incompatibility, and unbalanced quotes."""
+        res = check_xliff_quotes(xliff_path, output_path)
+        issues_found = res["issues_found"]
+        total = res["total_checked"]
+        if issues_found > 0:
+            click.secho(f"[WARNING] Found {issues_found} quote issue(s) across {total} checked string(s).", fg="yellow")
+            for iss in res["issues"][:10]:
+                click.echo(f"  [{iss['id']}] [{iss['issue']}] Source: {iss['source']} | Target: {iss['target']} -> Rec: {iss['recommendation']}")
+            if issues_found > 10:
+                click.echo(f"  ... and {issues_found - 10} more issue(s).")
+            sys.exit(1)
+        else:
+            click.secho(f"[SUCCESS] Checked {total} string(s). No quote mismatches or unbalanced quotes found!", fg="green")
+            sys.exit(0)
+
+    @main.command(name="check-fonts")
+    @click.option("--input", "-i", "input_path", required=True, type=click.Path(exists=True), help="Input game file or directory")
+    @click.option("--engine", "-e", required=True, type=str, help="Engine name (unity, il2cpp, unreal, renpy, cri)")
+    def check_fonts_cmd(input_path: str, engine: str):
+        """Check game font assets for Hungarian character glyph support (ő/ű)."""
+        res = check_game_fonts(input_path, engine)
+        status = res.get("status")
+        if status == "supported":
+            click.secho(f"{res['message']}", fg="green")
+        elif status == "warning":
+            click.secho(f"{res['message']}", fg="yellow")
+        else:
+            click.echo(res.get("message"))
+
+    @main.command(name="fix-catalog")
+    @click.option("--input", "-i", "input_path", required=True, type=click.Path(exists=True), help="Input Unity game directory containing Addressables catalog.json")
+    def fix_catalog_cmd(input_path: str):
+        """Recalculate CRC32 hashes for patched asset bundles and update catalog.json."""
+        res = fix_catalog_crc_command(input_path)
+        if res.get("catalog_found"):
+            click.secho(f"[SUCCESS] {res['message']}", fg="green")
+        else:
+            click.secho(f"[WARNING] {res['message']}", fg="yellow")
+
 except ImportError:
     # Argparse fallback
     import argparse
@@ -251,6 +297,20 @@ except ImportError:
         val_p = subparsers.add_parser("validate")
         val_p.add_argument("--xliff", "-x", required=True)
 
+        # check-quotes
+        cq_p = subparsers.add_parser("check-quotes")
+        cq_p.add_argument("--xliff", "-x", required=True)
+        cq_p.add_argument("--output", "-o")
+
+        # check-fonts
+        cf_p = subparsers.add_parser("check-fonts")
+        cf_p.add_argument("--input", "-i", required=True)
+        cf_p.add_argument("--engine", "-e", required=True)
+
+        # fix-catalog
+        fc_p = subparsers.add_parser("fix-catalog")
+        fc_p.add_argument("--input", "-i", required=True)
+
         args = parser.parse_args()
 
         if args.command == "extract":
@@ -276,6 +336,18 @@ except ImportError:
             rep = validate_xliff(args.xliff)
             print(f"Validation result: {rep}")
             sys.exit(0 if rep["valid"] else 1)
+        elif args.command == "check-quotes":
+            rep = check_xliff_quotes(args.xliff, args.output)
+            print(f"Quote check result: {rep}")
+            sys.exit(0 if rep["issues_found"] == 0 else 1)
+        elif args.command == "check-fonts":
+            rep = check_game_fonts(args.input, args.engine)
+            print(f"Font check result: {rep}")
+            sys.exit(0)
+        elif args.command == "fix-catalog":
+            rep = fix_catalog_crc_command(args.input)
+            print(f"Fix catalog result: {rep}")
+            sys.exit(0)
         else:
             parser.print_help()
 
