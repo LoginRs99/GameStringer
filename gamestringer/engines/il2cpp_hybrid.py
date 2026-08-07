@@ -22,7 +22,7 @@ from gamestringer.core.base_engine import BaseEngine, TransUnit, validate_smart_
 from gamestringer.core.xliff_exporter import export_xliff, parse_xliff
 from gamestringer.core.backup import create_backup
 from gamestringer.core.logger import logger
-from gamestringer.engines.unity_mono import UnityMonoEngine
+from gamestringer.core.ui_whitelist import UI_WHITELIST
 
 IL2CPP_METADATA_MAGIC = 0xFAB11BAF
 IL2CPPDUMPER_URL = "https://github.com/Perfare/Il2CppDumper/releases"
@@ -239,6 +239,7 @@ def determine_category(s: str, class_context: str = "") -> str:
 class IL2CppHybridEngine(BaseEngine):
 
     def __init__(self):
+        from gamestringer.engines.unity_mono import UnityMonoEngine
         self._unity_mono = UnityMonoEngine()
 
     @property

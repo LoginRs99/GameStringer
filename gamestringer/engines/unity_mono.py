@@ -18,6 +18,8 @@ from gamestringer.core.backup import create_backup
 from gamestringer.core.logger import logger
 from gamestringer.core.addressables_crc import auto_update_addressables_crc
 
+from gamestringer.core.ui_whitelist import UI_WHITELIST
+
 try:
     import UnityPy
 except ImportError:
@@ -32,6 +34,204 @@ _ASSEMBLY_QUALIFIED_RE = re.compile(
 )
 _DOTTED_SEGMENT_RE = re.compile(r"^[A-Z][A-Za-z0-9_\-]*$")
 _VERSION_RE = re.compile(rb"(\d{1,4}\.\d{1,2}\.\d{1,3}[fpab]?\d{0,3})")
+
+_TEXT_COMPONENT_KEYWORDS = (
+    "text", "tmp", "textmesh", "textmeshpro", "textasset", "stringtable", "sharedtabledata",
+    "localization", "localizedstring", "localizer", "uilabel", "ui_text",
+    "dialogue", "conversation", "narrative", "story", "subtitle", "caption", "narration",
+    "quest", "mission", "objective", "hint", "tutorial", "message", "mail", "letter", "notification",
+    "menu", "button", "label", "title", "header", "description", "tooltip", "popup", "toast",
+    "character", "npc", "enemy", "boss", "item", "weapon", "armor", "potion", "spell", "skill", "ability",
+    "lore", "journal", "diary", "book", "scroll", "codex", "encyclopedia",
+    "achievement", "trophy", "reward", "medal", "badge",
+    "shop", "store", "merchant", "vendor", "buy", "sell", "trade",
+    "save", "load", "slot", "profile", "settings", "options", "config",
+    "chapter", "stage", "level", "area", "location", "dungeon", "world", "map",
+    "health", "mana", "stamina", "energy", "xp", "attribute",
+    "cutscene", "cinematic", "intro", "outro", "ending", "credits",
+    "displayname", "heading"
+)
+
+_TEXT_PATH_KEYWORDS = (
+    "localization", "stringtable", "text", "dialogue", "ui", "menu", "quest", "story",
+    "subtitle", "lore", "journal", "notification", "tutorial", "message", "cutscene",
+    "cinematic", "intro", "credits", "ending", "name", "title", "description", "label",
+    "button", "popup", "toast", "run", "shared", "bundle", "asset"
+)
+
+_CODE_COMPONENT_EXACT = {
+    "transform", "recttransform", "camera", "light", "audiosource", "audioalignment", "audiohost", "audiolistener", "animator", "animation",
+    "rigidbody", "rigidbody2d", "collider", "collider2d", "meshrenderer", "skinnedmeshrenderer",
+    "spriterenderer", "particlesystem", "trailrenderer", "linerenderer", "canvas", "canvasscaler",
+    "graphicraycaster", "eventsystem", "standaloneinputmodule", "physics2draycaster", "physicsraycaster"
+}
+
+_CODE_COMPONENT_RE = re.compile(
+    r"\b(transform|recttransform|camera|light|audiosource|audiolistener|animator|animation|rigidbody|rigidbody2d|collider|collider2d|meshrenderer|skinnedmeshrenderer|spriterenderer|particlesystem|trailrenderer|linerenderer|canvas|canvasscaler|graphicraycaster|eventsystem)\b",
+    re.IGNORECASE
+)
+
+_HIGH_CONFIDENCE_FIELD_EXACT = {
+    "text", "m_text", "text_", "displaytext", "display_text",
+    "m_string", "stringvalue", "string_value",
+    "value", "m_value", "entry", "m_entry", "content", "m_content",
+    "title", "m_title", "header", "m_header", "heading", "m_heading",
+    "description", "m_description", "desc", "m_desc", "body", "m_body",
+    "name", "m_name", "displayname", "display_name", "message", "m_message", "msg", "m_msg",
+    "dialogue", "m_dialogue", "dialog", "m_dialog", "line", "m_line", "speech", "m_speech",
+    "subtitle", "m_subtitle", "caption", "m_caption",
+    "notification", "m_notification", "notify", "m_notify", "alert", "m_alert",
+    "tooltip", "m_tooltip", "hint", "m_hint", "tip", "m_tip",
+    "label", "m_label", "buttontext", "button_text", "btntext", "btn_text",
+    "questtext", "quest_text", "objectivetext", "objective_text", "missiontext", "mission_text",
+    "itemname", "item_name", "itemdescription", "item_description",
+    "charactername", "character_name", "npcname", "npc_name", "enemyname", "enemy_name",
+    "locationname", "location_name", "areaname", "area_name", "levelname", "level_name",
+    "loretext", "lore_text", "journaltext", "journal_text", "entrytext", "entry_text",
+    "boss_name_", "win_session_end_message_"
+}
+
+_FIELD_BLACKLIST = {
+    "localposition", "localrotation", "localscale", "position", "rotation", "eulerangles",
+    "anchormin", "anchormax", "anchoredposition", "sizedelta", "pivot", "offsetmin", "offsetmax",
+    "m_classname", "m_namespace", "m_assemblyname", "m_fullname", "m_typename",
+    "guid", "m_guid", "guid_", "uniqueid", "m_uniqueid",
+    "path_", "m_path", "assetpath", "asset_path", "filepath", "file_path",
+    "last_push_call_stack_", "last_pop_call_stack_", "call_stack", "stack_trace", "m_stacktrace",
+    "hash", "m_hash", "hash_", "crc", "m_crc", "checksum", "m_checksum",
+    "prefabassetpath", "prefab_asset_path", "m_prefabassetpath",
+    "assetbundlename", "asset_bundle_name", "m_assetbundlename",
+    "fmod_event_", "fmodevent", "audioevent", "audio_event", "soundevent", "sound_event",
+    "animatorstate", "animator_state", "statename", "state_name", "animationstate", "animation_state",
+    "clipname", "clip_name", "animationclip", "animation_clip",
+    "methodname", "method_name", "targetmethod", "target_method", "callbackmethod", "callback_method",
+    "eventhandler", "event_handler", "eventcallback", "event_callback", "propertyname", "field_name_", "target_method_name_"
+}
+
+_GUID_HEX_RE = re.compile(r"^[0-9a-fA-F]{32}$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+_CAMEL_CASE_CODE_RE = re.compile(r"^[a-z]+[A-Z0-9][a-zA-Z0-9_]*$|^[A-Z][a-z0-9]+[A-Z0-9][a-zA-Z0-9_]*$")
+_TITLE_OR_CAPS_RE = re.compile(r"^[A-Z][a-z]+$|^[A-Z]+$")
+_ACCENTED_RE = re.compile(r"[áéíóöőúüűÁÉÍÓÖŐÚÜŰ]")
+_PUNCTUATION_RE = re.compile(r'[.,!?;:\-"\']')
+
+
+def classify_component(class_name: str, rel_path: str) -> str:
+    """Classify MonoBehaviour into A (text_component), B (maybe_text), C (code_component), or D (unknown)."""
+    c_lower = class_name.lower()
+    p_lower = rel_path.lower()
+
+    # Category A (Text Component)
+    if any(k in c_lower for k in _TEXT_COMPONENT_KEYWORDS):
+        return "text_component"
+
+    # Category C (Code Component)
+    if c_lower in _CODE_COMPONENT_EXACT or _CODE_COMPONENT_RE.search(class_name):
+        return "code_component"
+
+    # Category B (Maybe Text)
+    if c_lower in ("monobehaviour", "gameobject", "scriptableobject", "component", "behaviour") or c_lower.startswith("monobehaviour_"):
+        if any(k in p_lower for k in _TEXT_PATH_KEYWORDS):
+            return "maybe_text"
+
+    return "unknown"
+
+
+def is_field_blacklisted(key_name: str, val_text: str) -> bool:
+    """Layer 2: Field Name Blacklist."""
+    k_lower = str(key_name).lower()
+    if k_lower in _FIELD_BLACKLIST or any(b in k_lower for b in _FIELD_BLACKLIST):
+        return True
+    return False
+
+
+def is_high_confidence_field(key_name: str) -> bool:
+    """Layer 2: High confidence text field name check."""
+    k_lower = str(key_name).lower()
+    return k_lower in _HIGH_CONFIDENCE_FIELD_EXACT
+
+
+def is_value_garbage(val_text: str, class_name: str) -> bool:
+    """Layer 3: Value Heuristics (Code & System Noise Blacklist)."""
+    s = val_text.strip()
+    s_lower = s.lower()
+    if not s or len(s) < 1 or len(s) > 10000:
+        return True
+    if s_lower in ("true", "false", "null", "none", "undefined", "nan", "infinity"):
+        return True
+    if _GUID_HEX_RE.match(s):
+        return True
+    if s_lower.startswith("   at ") or "get_stacktrace()" in s_lower:
+        return True
+    if s_lower.startswith("event:/") or s_lower.startswith("assets/") or s_lower.startswith("packages/"):
+        return True
+    if s_lower.endswith((".prefab", ".mat", ".asset", ".controller", ".anim", ".unity", ".png", ".jpg", ".tga", ".wav", ".mp3")):
+        return True
+    if any(ns in s for ns in ("System.Environment", "System.Action", "System.Collections", "UnityEngine.")):
+        return True
+    if s in ("Transform", "RectTransform", "Camera", "GameObject", "AudioSource", "Animator", "MonoBehaviour", "MonoScript"):
+        return True
+    if s.endswith(("_EventHandler", "_Callback", "_Coroutine", "_Listener")):
+        return True
+    if ".cs" in s_lower and ("\\" in s or "/" in s):
+        return True
+    if "," in s and "Version=" in s:
+        return True
+    if _looks_like_type_reference(s):
+        return True
+    return False
+
+
+def should_keep_string(key_name: str, val_text: str, class_name: str, category: str = "unknown") -> bool:
+    """Evaluate 4-layer smart filtering rules for a string value."""
+    if is_field_blacklisted(key_name, val_text):
+        return False
+    if is_value_garbage(val_text, class_name):
+        return False
+
+    s = val_text.strip()
+
+    # High-confidence field name priority
+    if is_high_confidence_field(key_name):
+        if not _CAMEL_CASE_CODE_RE.match(s) or " " in s:
+            return True
+
+    # Layer 3 Keep criteria (IS text if ANY match)
+    if " " in s and len([c for c in s if c.isalpha()]) >= 3:
+        return True
+    if _ACCENTED_RE.search(s):
+        return True
+    if len(s) > 5 and _PUNCTUATION_RE.search(s):
+        return True
+    if s.lower() in UI_WHITELIST or s in ("OK", "Yes", "No", "Play", "Settings", "Quit", "Back", "Save", "Exit", "HP", "MP", "XP", "LV", "HUD"):
+        return True
+
+    # Safety Net: Single word Title Case or ALL CAPS (e.g. "Inventory", "Attack", "Quests", "Play")
+    if 2 <= len(s) <= 20 and s.isalpha() and _TITLE_OR_CAPS_RE.match(s):
+        return True
+
+    # Check Layer 3 IS NOT text criteria
+    if " " not in s and not _ACCENTED_RE.search(s) and not _PUNCTUATION_RE.search(s) and len(s) < 30:
+        if _CAMEL_CASE_CODE_RE.match(s):
+            return False
+
+    if category == "text_component":
+        return True
+
+    if category in ("maybe_text", "unknown"):
+        if " " in s or _ACCENTED_RE.search(s) or _PUNCTUATION_RE.search(s) or s.lower() in UI_WHITELIST or _TITLE_OR_CAPS_RE.match(s):
+            return True
+        return False
+
+    return False
+    if len(s) > 5 and _PUNCTUATION_RE.search(s):
+        return True
+    if s.lower() in UI_WHITELIST or s in ("OK", "Yes", "No", "Play", "Settings", "Quit", "Back", "Save", "Exit"):
+        return True
+    if _CAMEL_CASE_CODE_RE.match(s) and len(s) < 30 and " " not in s:
+        return False
+    if any(k in class_name.lower() for k in _TEXT_COMPONENT_KEYWORDS):
+        return True
+    return False
 
 
 def _looks_like_type_reference(s: str) -> bool:
@@ -298,6 +498,9 @@ class UnityMonoEngine(BaseEngine):
         counter = start_counter
 
         env = UnityPy.load(full_path)
+        skipped_components = 0
+        inspected_components = 0
+        extracted_text_count = 0
 
         for obj in env.objects:
             if obj.type.name == "MonoBehaviour":
@@ -305,15 +508,22 @@ class UnityMonoEngine(BaseEngine):
                     data = obj.read_typetree()
                     if isinstance(data, dict):
                         mb_name = data.get("m_Name", f"MonoBehaviour_{obj.path_id}")
-                        entries = self._extract_strings_from_dict(data)
+                        cat = classify_component(mb_name, rel_path)
+                        if cat == "code_component":
+                            skipped_components += 1
+                            continue
+
+                        inspected_components += 1
+                        entries = self._extract_strings_from_dict(data, mb_name, cat)
 
                         for key_name, val_text in entries:
                             if val_text and len(val_text.strip()) > 0:
                                 counter += 1
+                                extracted_text_count += 1
                                 uid = f"unity_{obj.path_id}_{counter:05d}"
 
                                 smart_tokens = SMART_STRING_PATTERN.findall(val_text)
-                                context = f"mono_behaviour:{mb_name}"
+                                context = f"mono_behaviour:{mb_name} | cat:{cat}"
                                 if smart_tokens:
                                     context += f" | smart_tokens:{','.join(smart_tokens)}"
 
@@ -344,8 +554,14 @@ class UnityMonoEngine(BaseEngine):
                     if text_content and len(text_content) > 2:
                         extracted_units, counter = self._parse_text_asset_content(text_content, asset_name, rel_path, obj.path_id, counter)
                         units.extend(extracted_units)
+                        extracted_text_count += len(extracted_units)
                 except Exception as err:
                     logger.warning(f"Error parsing TextAsset {obj.path_id} in '{rel_path}': {err}")
+
+        if skipped_components > 0:
+            logger.debug(f"Skipped {skipped_components} code/system components in '{rel_path}'")
+        if extracted_text_count > 0:
+            logger.debug(f"Extracted {extracted_text_count} text strings from '{rel_path}'")
 
         return units, counter
 
@@ -430,7 +646,7 @@ class UnityMonoEngine(BaseEngine):
 
         return "".join(patched_lines), sub_count
 
-    def _extract_strings_from_dict(self, data: Any) -> List[Tuple[str, str]]:
+    def _extract_strings_from_dict(self, data: Any, class_name: str = "", category: str = "unknown") -> List[Tuple[str, str]]:
         results = []
 
         if isinstance(data, dict):
@@ -440,20 +656,21 @@ class UnityMonoEngine(BaseEngine):
                     if isinstance(item, dict):
                         k = item.get("m_Key") or item.get("m_Id") or item.get("m_KeyId") or item.get("key")
                         v = item.get("m_Value") or item.get("m_Localized") or item.get("value")
-                        if v and isinstance(v, str):
+                        if v and isinstance(v, str) and should_keep_string(str(k or "entry"), v, class_name, category):
                             results.append((str(k or "entry"), v))
 
             for k, v in data.items():
-                if k in ("m_TableData", "m_Entries", "m_StringTable"):
+                if k in ("m_TableData", "m_Entries", "m_StringTable", "m_Script", "m_Name", "m_TypeName"):
                     continue
-                if isinstance(v, str) and len(v.strip()) > 1 and not k.startswith("m_Script") and k not in ("m_Name", "m_TypeName") and not _looks_like_type_reference(v):
-                    results.append((k, v))
+                if isinstance(v, str) and len(v.strip()) > 0:
+                    if should_keep_string(k, v, class_name, category):
+                        results.append((k, v))
                 elif isinstance(v, (dict, list)):
-                    results.extend(self._extract_strings_from_dict(v))
+                    results.extend(self._extract_strings_from_dict(v, class_name, category))
 
         elif isinstance(data, list):
             for item in data:
-                results.extend(self._extract_strings_from_dict(item))
+                results.extend(self._extract_strings_from_dict(item, class_name, category))
 
         return results
 
