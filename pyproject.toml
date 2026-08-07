@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gamestringer-cli"
+version = "1.0.0"
+description = "Standalone Python CLI tool and GUI wrapper for game text extraction and repatching (XLIFF 1.2 / PO)"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+dependencies = [
+    "click>=8.0.0",
+    "lxml>=4.9.0",
+]
+
+[project.scripts]
+gamestringer = "gamestringer.cli:main"
+gamestringer-gui = "gamestringer.gui:main"

@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+dist/
+*.egg
+.eggs/
+
+# Tool outputs & backups
+*.xliff
+*.bak*
+*.tmp
+*.log
+
+# User config
+gui_settings.json
+gamestringer_gui_settings.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
