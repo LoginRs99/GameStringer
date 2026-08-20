@@ -6,29 +6,43 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import threading
 import tkinter as tk
 from tkinter import ttk, messagebox
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 import yaml
 
 from locpipe.config import load_project, ProjectConfig
 from locpipe.adapters.registry import get_adapter
-from locpipe.audit import build_audit_report, render_report_markdown
 from gamestringer.desktop_gui.tabs.projects_tab import get_default_projects_dir
 from gamestringer.desktop_gui.theme import (
     BG_DARK, BG_CARD, BG_ENTRY, FG_TEXT, FG_MUTED,
     ACCENT_CYAN, ACCENT_EMERALD, ACCENT_MAGENTA,
     FONT_TITLE, FONT_HEADING, FONT_BODY, FONT_MONO
 )
+from gamestringer.desktop_gui.tooltip import create_tooltip
+from gamestringer.desktop_gui.widgets import (
+    section_frame, labeled_entry, labeled_combo, action_button, progress_bar
+)
 
 
 class AuditTab(ttk.Frame):
-    def __init__(self, parent: ttk.Notebook, root: tk.Tk):
+    def __init__(
+        self,
+        parent: ttk.Notebook,
+        root: tk.Tk,
+        shared_project_var: Optional[tk.StringVar] = None,
+        on_project_changed_callback: Optional[Callable[[str], None]] = None
+    ):
         super().__init__(parent, style="TFrame")
         self.root = root
+        self.shared_project_var = shared_project_var
+        self.on_project_changed_callback = on_project_changed_callback
+
         self.projects_dir = get_default_projects_dir()
         self.current_project_dir: Optional[Path] = None
         self.audit_records: List[Dict[str, str]] = []
+        self.is_auditing = False
 
         self._build_ui()
         self.refresh_projects()
@@ -48,24 +62,34 @@ class AuditTab(ttk.Frame):
             top_bar,
             textvariable=self.var_selected_project,
             state="readonly",
-            width=25,
+            width=22,
         )
         self.combo_project.pack(side=tk.LEFT, padx=(0, 10))
         self.combo_project.bind("<<ComboboxSelected>>", self._on_project_changed)
+        create_tooltip(self.combo_project, "Select active project for non-LLM extraction noise auditing")
 
-        ttk.Button(top_bar, text="🔄 Refresh", command=self.refresh_projects).pack(side=tk.LEFT, padx=(0, 10))
+        action_button(top_bar, "🔄 Refresh", self.refresh_projects,
+                      tooltip="Refresh list of projects from disk").pack(side=tk.LEFT, padx=(0, 10))
 
-        btn_run = ttk.Button(top_bar, text="⚡ Run Extraction Audit", style="Primary.TButton", command=self.run_audit)
-        btn_run.pack(side=tk.LEFT, padx=(0, 10))
+        self.btn_run = action_button(
+            top_bar, "⚡ Run Extraction Audit", self._start_audit,
+            style="Primary.TButton", tooltip="Extract batch files without LLM calls and classify translatable text vs. engine noise"
+        )
+        self.btn_run.pack(side=tk.LEFT, padx=(0, 10))
 
-        btn_exclude = ttk.Button(top_bar, text="🚫 Exclude Selected Path", command=self.exclude_selected_path)
-        btn_exclude.pack(side=tk.LEFT, padx=(0, 10))
+        self.btn_exclude = action_button(
+            top_bar, "🚫 Exclude Selected Path", self.exclude_selected_path,
+            tooltip="Append the selected row's JSON path regex to format_options.uabea_json_path_exclude in project.yaml"
+        )
+        self.btn_exclude.pack(side=tk.LEFT, padx=(0, 10))
+
+        self.pbar = progress_bar(top_bar, mode="indeterminate", length=140)
 
         self.lbl_status = tk.Label(top_bar, text="", font=FONT_BODY, bg=BG_CARD, fg=ACCENT_EMERALD)
         self.lbl_status.pack(side=tk.LEFT, padx=10)
 
         # Summary Metrics Frame
-        self.summary_frame = ttk.Labelframe(main_frame, text=" Audit Summary ", style="TLabelframe", padding=10)
+        self.summary_frame = section_frame(main_frame, "Audit Summary", padding=10)
         self.summary_frame.pack(fill=tk.X, pady=(0, 10))
 
         self.lbl_metrics = tk.Label(
@@ -82,22 +106,29 @@ class AuditTab(ttk.Frame):
         filter_bar = ttk.Frame(main_frame, style="TFrame")
         filter_bar.pack(fill=tk.X, pady=(0, 5))
 
-        ttk.Label(filter_bar, text="Filter Action:", font=FONT_BODY, background=BG_DARK, foreground=FG_TEXT).pack(side=tk.LEFT, padx=(0, 5))
-        self.var_filter_action = tk.StringVar(value="ALL")
-        self.combo_filter = ttk.Combobox(
-            filter_bar,
-            textvariable=self.var_filter_action,
-            values=["ALL", "kept", "noise:*", "excluded_by_config"],
-            state="readonly",
-            width=18
+        filter_tooltips = (
+            "Filter rows by classification action:\n"
+            "• ALL: Show all extracted strings\n"
+            "• kept: Translatable strings that would be sent to the LLM\n"
+            "• noise:*: Strings dropped by the built-in conservative heuristic (GUIDs, types, colors)\n"
+            "• excluded_by_config: Strings dropped by project.yaml uabea_json_path_exclude patterns"
         )
-        self.combo_filter.pack(side=tk.LEFT, padx=(0, 15))
+        r_f_combo, self.combo_filter = labeled_combo(
+            filter_bar, "Filter Action:", tk.StringVar(value="ALL"),
+            values=["ALL", "kept", "noise:*", "excluded_by_config"],
+            width=18, label_width=12, tooltip=filter_tooltips
+        )
+        self.var_filter_action = self.combo_filter.cget("textvariable") or tk.StringVar(value="ALL")
+        self.combo_filter.configure(textvariable=self.var_filter_action)
+        r_f_combo.pack(side=tk.LEFT, padx=(0, 15))
         self.combo_filter.bind("<<ComboboxSelected>>", lambda e: self._apply_filter())
 
-        ttk.Label(filter_bar, text="Search Path / Text:", font=FONT_BODY, background=BG_DARK, foreground=FG_TEXT).pack(side=tk.LEFT, padx=(0, 5))
         self.var_search = tk.StringVar()
-        entry_search = ttk.Entry(filter_bar, textvariable=self.var_search, width=30)
-        entry_search.pack(side=tk.LEFT, padx=(0, 8))
+        r_search, entry_search = labeled_entry(
+            filter_bar, "Search Path/Text:", self.var_search, width=28, label_width=15,
+            tooltip="Live text search filtering by JSON path, asset name, or string content"
+        )
+        r_search.pack(side=tk.LEFT, padx=(0, 8))
         entry_search.bind("<KeyRelease>", lambda e: self._apply_filter())
 
         # Table (Treeview)
@@ -126,6 +157,7 @@ class AuditTab(ttk.Frame):
 
         table_frame.grid_rowconfigure(0, weight=1)
         table_frame.grid_columnconfigure(0, weight=1)
+        create_tooltip(self.tree, "Click a row to select it, then click 'Exclude Selected Path' to add it to exclusion rules")
 
     def refresh_projects(self):
         self.projects_dir = get_default_projects_dir()
@@ -136,64 +168,101 @@ class AuditTab(ttk.Frame):
                     projs.append(p.name)
 
         self.combo_project["values"] = projs
-        if projs:
-            if not self.var_selected_project.get() or self.var_selected_project.get() not in projs:
-                self.var_selected_project.set(projs[0])
-                self.current_project_dir = self.projects_dir / projs[0]
+        target = self.shared_project_var.get() if self.shared_project_var else ""
+        if target and target in projs:
+            self.var_selected_project.set(target)
+            self.current_project_dir = self.projects_dir / target
+        elif projs:
+            self.var_selected_project.set(projs[0])
+            self.current_project_dir = self.projects_dir / projs[0]
         else:
             self.var_selected_project.set("")
             self.current_project_dir = None
+
+    def select_project(self, name: str):
+        projs = self.combo_project["values"]
+        if name in projs:
+            self.var_selected_project.set(name)
+            self.current_project_dir = self.projects_dir / name
 
     def _on_project_changed(self, event=None):
         name = self.var_selected_project.get()
         if name:
             self.current_project_dir = self.projects_dir / name
+            if self.shared_project_var and self.shared_project_var.get() != name:
+                self.shared_project_var.set(name)
+            if self.on_project_changed_callback:
+                self.on_project_changed_callback(name)
 
-    def run_audit(self):
+    def _start_audit(self):
         if not self.current_project_dir or not (self.current_project_dir / "project.yaml").exists():
-            messagebox.showwarning("No Project", "Please select a valid project first.")
+            messagebox.showwarning("No Project", "Please select a valid project first.", parent=self.root)
             return
 
-        try:
-            config = load_project(self.current_project_dir)
-            adapter = get_adapter(config.format, config.format_options)
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to load project: {e}")
+        if self.is_auditing:
             return
 
-        self.audit_records.clear()
-        files_scanned = 0
-        files_failed = []
+        self.is_auditing = True
+        self.btn_run.config(state="disabled")
+        self.pbar.pack(side=tk.LEFT, padx=5)
+        self.pbar.start(10)
+        self.lbl_status.config(text="Scanning batch files...", fg=ACCENT_CYAN)
 
-        import inspect
-        supports_sink = "audit_sink" in inspect.signature(adapter.extract).parameters
+        def worker():
+            records = []
+            files_scanned = 0
+            files_failed = []
+            msg = ""
 
-        if not supports_sink:
-            self.lbl_metrics.config(
-                text=f"Format adapter '{config.format}' does not support typetree audit sink (only uabea_json Case 2/3 currently uses this).",
-                fg=ACCENT_CYAN
-            )
-            self._render_records()
-            return
-
-        for path in config.batch_files:
-            sink: list[tuple[str, str, str]] = []
             try:
-                adapter.extract(path, audit_sink=sink)
-                files_scanned += 1
+                config = load_project(self.current_project_dir)
+                adapter = get_adapter(config.format, config.format_options)
+
+                import inspect
+                if "audit_sink" not in inspect.signature(adapter.extract).parameters:
+                    msg = f"Format adapter '{config.format}' does not support typetree audit sink (only uabea_json Case 2/3 currently uses this)."
+                else:
+                    for path in config.batch_files:
+                        sink: list[tuple[str, str, str]] = []
+                        try:
+                            adapter.extract(path, audit_sink=sink)
+                            files_scanned += 1
+                        except Exception as e:
+                            files_failed.append(f"{path.name}: {e}")
+                            continue
+
+                        for json_path, value, action in sink:
+                            records.append({
+                                "file": path.stem,
+                                "path": json_path,
+                                "action": action,
+                                "value": value
+                            })
+
+                self.root.after(0, self._on_audit_complete, records, files_scanned, files_failed, msg, None)
             except Exception as e:
-                files_failed.append(f"{path.name}: {e}")
-                continue
+                self.root.after(0, self._on_audit_complete, [], 0, [], "", str(e))
 
-            for json_path, value, action in sink:
-                self.audit_records.append({
-                    "file": path.stem,
-                    "path": json_path,
-                    "action": action,
-                    "value": value
-                })
+        threading.Thread(target=worker, daemon=True).start()
 
-        # Calculate metrics
+    def _on_audit_complete(self, records: list, files_scanned: int, files_failed: list, special_msg: str, error: Optional[str]):
+        self.is_auditing = False
+        self.pbar.stop()
+        self.pbar.pack_forget()
+        self.btn_run.config(state="normal")
+        self.lbl_status.config(text="")
+
+        if error:
+            messagebox.showerror("Audit Error", f"Audit failed: {error}", parent=self.root)
+            return
+
+        self.audit_records = records
+
+        if special_msg:
+            self.lbl_metrics.config(text=special_msg, fg=ACCENT_CYAN)
+            self._render_records([])
+            return
+
         kept_count = sum(1 for r in self.audit_records if r["action"] == "kept")
         ex_count = sum(1 for r in self.audit_records if r["action"] == "excluded_by_config")
         noise_count = sum(1 for r in self.audit_records if r["action"].startswith("noise:"))
@@ -209,7 +278,7 @@ class AuditTab(ttk.Frame):
         self._apply_filter()
 
     def _apply_filter(self):
-        action_filter = self.var_filter_action.get()
+        action_filter = self.var_filter_action.get() if hasattr(self.var_filter_action, "get") else "ALL"
         search_query = self.var_search.get().lower().strip()
 
         filtered = []
@@ -235,7 +304,6 @@ class AuditTab(ttk.Frame):
             self.tree.delete(item)
 
         to_show = records if records is not None else self.audit_records
-        # Cap display at 2000 rows for smooth UI performance
         for r in to_show[:2000]:
             preview_val = r["value"].replace("\n", "\\n")
             if len(preview_val) > 80:
@@ -245,7 +313,7 @@ class AuditTab(ttk.Frame):
     def exclude_selected_path(self):
         sel = self.tree.selection()
         if not sel:
-            messagebox.showinfo("Select Row", "Please select a row in the table to exclude its path.")
+            messagebox.showinfo("Select Row", "Please select a row in the table to exclude its path.", parent=self.root)
             return
 
         item = self.tree.item(sel[0], "values")
@@ -266,15 +334,14 @@ class AuditTab(ttk.Frame):
                 excludes = [str(excludes)]
                 format_opts["uabea_json_path_exclude"] = excludes
 
-            # Add exact path regex pattern if not already present
             pattern = f"^{json_path}$"
             if pattern not in excludes and json_path not in excludes:
                 excludes.append(pattern)
                 cfg_file.write_text(yaml.dump(cfg, sort_keys=False, allow_unicode=True), encoding="utf-8")
                 self.lbl_status.config(text=f"🚫 Excluded pattern '{pattern}' in project.yaml", fg=ACCENT_CYAN)
-                messagebox.showinfo("Path Excluded", f"Added '{pattern}' to format_options.uabea_json_path_exclude in project.yaml.")
-                self.run_audit()
+                messagebox.showinfo("Path Excluded", f"Added '{pattern}' to format_options.uabea_json_path_exclude in project.yaml.", parent=self.root)
+                self._start_audit()
             else:
-                messagebox.showinfo("Already Excluded", f"Pattern for '{json_path}' is already in excludes list.")
+                messagebox.showinfo("Already Excluded", f"Pattern for '{json_path}' is already in excludes list.", parent=self.root)
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to update project.yaml: {e}")
+            messagebox.showerror("Error", f"Failed to update project.yaml: {e}", parent=self.root)
