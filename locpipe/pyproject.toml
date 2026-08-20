@@ -1,0 +1,24 @@
+[project]
+name = "locpipe"
+version = "0.18.0"
+description = "Deterministic, multi-project localization pipeline. LLM translates and repairs; Python does everything else."
+requires-python = ">=3.10"
+dependencies = [
+    "pyyaml>=6.0",
+    "jsonschema>=4.20",
+    "polib>=1.2",
+]
+
+[project.scripts]
+locpipe = "locpipe.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["locpipe*"]
+
+[tool.setuptools.package-data]
+locpipe = ["agents/*.md"]

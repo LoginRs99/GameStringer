@@ -1,0 +1,54 @@
+project: demo
+source_lang: en
+target_lang: hu
+
+format: generic_kv
+
+batches:
+  glob: "batches/*.json"
+
+resources:
+  glossary: resources/glossary.md
+  lang_style: resources/lang-style.md
+  character_voices: resources/character-voices.md
+  anti_fabrication_checklist: resources/anti-fabrication-checklist.md
+
+categories:
+  - name: developer_text
+    match_key_regex: "CombatEncounterManagerNode|WeightRoleAffinity"
+    needs_character_voice: false
+    batch_size: 175   # ~75% of max_output_tokens(8192) / ~35 tokens per translated
+                       # entry (JSON envelope + a moderately long line) -- see
+                       # ProviderConfig.max_output_tokens's docstring for the math.
+                       # A batch_size sized to comfortably finish in ONE attempt beats
+                       # a larger one that risks truncation-retry waste (each retry
+                       # resends the WHOLE batch for zero usable output) -- more calls,
+                       # but each succeeds the first time, which is the actual win.
+  - name: dialogue
+    match_speaker_present: true
+    needs_character_voice: true
+    batch_size: 100    # tighter than the other two: natural dialogue lines run longer
+                       # per entry than a UI label, and preceding_context (if enabled)
+                       # adds further per-entry length -- same math, shorter safety margin.
+  - name: ui
+    default: true
+    needs_character_voice: false
+    batch_size: 175
+
+provider:
+  name: antigravity_cli
+  model: gemini-3.7-flash
+  effort: low
+  review_model: gemini-3.7-flash
+  review_effort: high
+  mode: sync
+  max_concurrency: 5
+  max_output_tokens: 8192  # the batch_size values above are sized against this --
+                           # if you raise this (check your model's real ceiling first),
+                           # you can raise batch_size roughly proportionally too
+
+tm:
+  db_path: tm/translation_memory.sqlite3
+
+confidence:
+  review_threshold: 0.75

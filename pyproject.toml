@@ -3,17 +3,37 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "gamestringer-cli"
-version = "1.0.0"
-description = "Standalone Python CLI tool and GUI wrapper for game text extraction and repatching (XLIFF 1.2 / PO)"
+name = "gamestringer"
+version = "2.0.0"
+description = "Project-config and preflight GUI wrapping the LocPipe translation pipeline (Antigravity CLI provider)"
 readme = "README.md"
-requires-python = ">=3.8"
-license = { text = "MIT" }
+requires-python = ">=3.10"
 dependencies = [
     "click>=8.0.0",
-    "lxml>=4.9.0",
+    "pyyaml>=6.0",
+    "jsonschema>=4.20",
+    "polib>=1.2",
 ]
 
 [project.scripts]
 gamestringer = "gamestringer.cli:main"
-gamestringer-gui = "gamestringer.gui:main"
+gamestringer-gui = "gamestringer.desktop_gui.app:main"
+locpipe = "locpipe.cli:main"
+
+[tool.setuptools]
+packages = [
+    "gamestringer",
+    "gamestringer.core",
+    "gamestringer.desktop_gui",
+    "gamestringer.desktop_gui.tabs",
+    "locpipe",
+    "locpipe.adapters",
+    "locpipe.providers",
+    "locpipe.validators",
+]
+
+[tool.setuptools.package-dir]
+"locpipe" = "locpipe/src/locpipe"
+
+[tool.setuptools.package-data]
+locpipe = ["agents/*.md"]

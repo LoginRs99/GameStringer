@@ -12,6 +12,8 @@ from gamestringer.core.logger import logger
 
 try:
     import UnityPy
+    import UnityPy.config
+    UnityPy.config.FALLBACK_UNITY_VERSION = "2021.3.0f1"
 except ImportError:
     UnityPy = None
 

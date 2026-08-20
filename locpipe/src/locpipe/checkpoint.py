@@ -1,0 +1,127 @@
+"""Checkpoint/resume state for long runs.
+
+Two genuinely different problems, both under one file because they
+share the same on-disk state:
+
+1. Sync mode: real resumability, not just a progress log. pipeline.run()
+   now processes one input file at a time -- extract, translate,
+   validate, review/repair, merge, and commit that file's results to
+   the TM -- before moving to the next file, and calls mark_file_done()
+   only once all of that has landed. A crash (or a rate-limit that
+   exhausts retries) partway through a run leaves every already-
+   finished file committed and skippable on restart via is_file_done();
+   only the file that was in flight, and anything after it, gets
+   reprocessed -- and even that reprocessing is cheap, since anything
+   within it that already made it into the TM (e.g. other strings in
+   the same file that translated fine before a sibling batch failed)
+   is picked straight back up by enrich_and_dedupe() rather than
+   re-translated. completed_batches below remains a human-readable
+   progress trail on top of this, not the resumability mechanism itself.
+
+2. Batch mode: this is where a checkpoint is load-bearing, not
+   decoration. A Message Batch / Gemini Batch job is submitted once
+   and can take up to 24-48h to resolve. If the Python process dies
+   while *waiting* -- laptop sleeps, terminal closes, SSH drops -- a
+   naive restart would submit a brand new job for the same content.
+   Both providers' docs are explicit that batch creation is not
+   idempotent: that's not a retry, it's a duplicate charge for the
+   same translations. This module persists the pending job id the
+   moment it's returned, before any blocking poll, so a restart
+   reattaches to the same job instead of resubmitting.
+
+   Recomputing the batch structure fresh on resume (rather than
+   serializing the full request payload) is deliberate: extract ->
+   classify -> dedupe -> build_batches is a pure function of the batch
+   files and TM state, both of which are untouched between submission
+   and a resume (nothing writes to either until results come back).
+   So resuming recomputes it and checks a fingerprint against what was
+   actually submitted, rather than trusting that nothing changed --
+   if a batch file was hand-edited while a job was in flight, this
+   fails loudly instead of silently mis-attributing results.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import time
+from pathlib import Path
+from typing import Optional
+
+
+def fingerprint_batches(batches) -> str:
+    ordered = [[e.tm_key for e in b.representatives] for b in batches]
+    return hashlib.sha256(json.dumps(ordered, sort_keys=False).encode("utf-8")).hexdigest()
+
+
+class Checkpoint:
+    def __init__(self, path: Path):
+        self.path = path
+        self.data = self._load()
+
+    def _load(self) -> dict:
+        if self.path.exists():
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+            data.setdefault("completed_files", [])
+            return data
+        return {"completed_batches": [], "pending_job": None, "last_updated": None, "completed_files": []}
+
+    def _save(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.data["last_updated"] = time.time()
+        tmp_path = self.path.with_suffix(".tmp")
+        tmp_path.write_text(json.dumps(self.data, indent=2), encoding="utf-8")
+        tmp_path.replace(self.path)
+
+    def mark_batch_done(self, category: str, entry_count: int) -> None:
+        self.data["completed_batches"].append(
+            {"category": category, "entry_count": entry_count, "at": time.time()}
+        )
+        self._save()
+
+    def save_batch_drafts(self, drafts: dict[str, str]) -> None:
+        self.data.setdefault("batch_drafts", {}).update(drafts)
+        self._save()
+
+    def get_batch_drafts(self) -> dict[str, str]:
+        return self.data.get("batch_drafts", {})
+
+    def mark_file_done(self, file_path: str) -> None:
+        """Called only after a file's translations are validated, reviewed
+        (if needed), merged into its native file, AND committed to the TM --
+        i.e. only after there is nothing left that a crash could lose for
+        this file. See run()'s per-file loop in pipeline.py: everything
+        between extract() and this call either all lands or, on an
+        exception partway through, none of it does (the file isn't marked
+        done, and TM commits for OTHER already-finished files are
+        untouched -- they aren't rolled back just because a later file
+        in the same run failed).
+        """
+        if file_path not in self.data["completed_files"]:
+            self.data["completed_files"].append(file_path)
+        self._save()
+
+    def is_file_done(self, file_path: str) -> bool:
+        return file_path in self.data["completed_files"]
+
+    def set_pending_job(self, job_id: str, provider_name: str, fingerprint: str, n_requests: int) -> None:
+        self.data["pending_job"] = {
+            "job_id": job_id,
+            "provider_name": provider_name,
+            "fingerprint": fingerprint,
+            "n_requests": n_requests,
+            "submitted_at": time.time(),
+        }
+        self._save()
+
+    def get_pending_job(self) -> Optional[dict]:
+        return self.data.get("pending_job")
+
+    def clear_pending_job(self) -> None:
+        self.data["pending_job"] = None
+        self._save()
+
+    def progress_summary(self) -> str:
+        n = len(self.data["completed_batches"])
+        total = sum(b["entry_count"] for b in self.data["completed_batches"])
+        return f"{n} batch(es) completed so far, {total} entries committed"

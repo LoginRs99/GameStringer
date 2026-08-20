@@ -5,11 +5,33 @@ Analyzes XLIFF files to detect quote mismatches, unbalanced opening/closing quot
 and font-incompatible quote styles (e.g., Hungarian „...” or curly “...” vs. straight "...").
 """
 
+import os
 import json
 import re
+import xml.etree.ElementTree as ET
 from typing import List, Dict, Any, Optional
-from gamestringer.core.xliff_exporter import parse_xliff
 from gamestringer.core.logger import logger
+
+
+def _parse_xliff_units(xliff_path: str) -> List[tuple]:
+    if not os.path.exists(xliff_path):
+        raise FileNotFoundError(f"XLIFF file not found: {xliff_path}")
+    tree = ET.parse(xliff_path)
+    root = tree.getroot()
+    units = []
+    for tu in root.iter():
+        if tu.tag.endswith("trans-unit") or tu.tag == "trans-unit":
+            tu_id = tu.attrib.get("id", "")
+            src = ""
+            tgt = ""
+            for child in tu:
+                tag = child.tag.split("}")[-1]
+                if tag == "source":
+                    src = child.text or ""
+                elif tag == "target":
+                    tgt = child.text or ""
+            units.append((tu_id, src, tgt))
+    return units
 
 
 def check_xliff_quotes(xliff_path: str, output_json: Optional[str] = None) -> Dict[str, Any]:
@@ -18,13 +40,11 @@ def check_xliff_quotes(xliff_path: str, output_json: Optional[str] = None) -> Di
 
     Returns dict with keys: 'issues', 'total_checked', 'issues_found'.
     """
-    units = parse_xliff(xliff_path)
+    units = _parse_xliff_units(xliff_path)
     issues = []
     total_checked = 0
 
-    for u in units:
-        src = u.source or ""
-        tgt = u.target or ""
+    for tu_id, src, tgt in units:
         if not src or not tgt or not tgt.strip():
             continue
 
@@ -32,7 +52,7 @@ def check_xliff_quotes(xliff_path: str, output_json: Optional[str] = None) -> Di
         unit_issues = _analyze_quote_pair(src, tgt)
         for issue_type, rec in unit_issues:
             issues.append({
-                "id": u.id,
+                "id": tu_id,
                 "source": src[:100],
                 "target": tgt[:100],
                 "issue": issue_type,

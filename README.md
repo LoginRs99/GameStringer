@@ -1,275 +1,127 @@
-# GameStringer CLI
+# GameStringer — LocPipe Desktop Preflight & Translation Manager
 
-> **Standalone Python CLI tool** játékszöveg kinyerésére és visszapattintására több játékengine-ből.
-> Forkolva a [GameStringer](https://github.com/LoginRs99/GameStringer) Tauri appból — lecsupaszítva csak a kinyerés/visszaírás pipeline-ra.
-
----
-
-## 🎯 Mit csinál?
-
-A GameStringer CLI **kinyeri a játékok szöveges tartalmát** (dialógus, UI, menü, quest szövegek) és **XLIFF 1.2** formátumba exportálja. A lefordított XLIFF-et később **vissza is írja** az eredeti játékfájlokba.
-
-- ❌ **Nincs benne:** AI fordítás, grafikus játék library, Tauri/Rust, web UI
-- ✅ **Van benne:** 5 engine támogatás, XLIFF/PO export, automatikus backup, dry-run, batch mód, QA csekkerek, Tkinter GUI
+> **Unified Localization Pipeline & Preflight GUI** wrapping the `locpipe` deterministic translation engine with **Google Antigravity CLI** (`gemini-3.7-flash`) as the sole LLM provider.
 
 ---
 
-## 🎮 Támogatott Engine-ek
+## 🎯 Architecture & Scope
 
-| Engine | Fájlok | Státusz | Leírás |
-|--------|--------|---------|--------|
-| **`unity`** | `.assets`, `.bundle` | ✅ Kész | Unity Mono — StringTable, SharedTableData, TextAsset (UnityPy) |
-| **`il2cpp`** | `GameAssembly.dll`, `global-metadata.dat` | ✅ Kész | Unity IL2CPP Hybrid — assets + metadata + XUnity pre-trans |
-| **`unreal`** | `.locres` | ✅ Kész | Unreal Engine 4/5 bináris `.locres` táblák (v0–v3) |
-| **`renpy`** | `.rpy`, `.rpa`, `game/` | ✅ Kész | Ren'Py Visual Novel — dialógus, narration, `translate <lang>` blokk generálás |
-| **`cri`** | `.msg`, `.bmd`, `.ftd`, `.cpk` | ✅ Kész | CRI Middleware — Persona, Yakuza, Tales of (Shift-JIS, UTF-8, UTF-16) |
+GameStringer consolidates game localization into a clean, deterministic pipeline:
+- **No binary parsing / extraction inside this tool**: Game-file extraction and reimporting is done externally via standard community tools (e.g. **UABEA** for Unity asset dumps, **Unreal Localization Dashboard** PO export for Unreal Engine).
+- **Sole LLM Provider**: Hardened Antigravity CLI (`agy --print`) integration with automatic retry, exponential backoff, and subprocess safety.
+- **Tkinter Desktop GUI (`gamestringer-gui`)**: 4 focused tabs for managing projects, inspecting engine noise, checking font glyphs, and streaming live translations.
 
 ---
 
-## 📦 Telepítés
+## 🔄 End-to-End Workflow
+
+```
+1. Manual Extraction (External)
+   ├── Unity: UABEA JSON export (Case 1 CSV-in-m_Script or Case 2/3 typetree dump)
+   └── Unreal: Localization Dashboard .po export (ue4_5_po)
+           │
+           ▼
+2. Project Setup (`gamestringer-gui` -> Projects Tab)
+   ├── Scaffold project under locpipe/projects/<name>/
+   ├── Configure source_lang, target_lang, format, batch_glob
+   └── Drop extracted batch files into locpipe/projects/<name>/batches/
+           │
+           ▼
+3. Preflight & Noise Audit (Preflight & Audit Tabs)
+   ├── Check Hungarian font glyph compatibility (ő/ű/Ő/Ű via check-fonts)
+   └── Run non-LLM extraction audit to inspect noise & 1-click exclude junk paths
+           │
+           ▼
+4. Plan (Run Tab)
+   └── Run `locpipe plan` for dry-run deduplication, batch counts & token estimates (0 API cost)
+           │
+           ▼
+5. Translation (Run Tab)
+   └── Run `locpipe run` via Antigravity CLI (Gemini 3.7 Flash) with live log streaming
+           │
+           ▼
+6. Reimport & Post-Patch Fix
+   ├── Manually reimport translated files into the game (UABEA / Unreal)
+   └── Run Catalog CRC Fixer (`gamestringer fix-catalog`) for Unity Addressables
+```
+
+---
+
+## 📦 Installation
 
 ```bash
-# Repo klónozása
+# Clone the repository
 git clone https://github.com/LoginRs99/GameStringer.git
-cd GameStringer/gamestringer_cli
+cd GameStringer
 
-# Telepítés pip-pel (fejlesztői mód)
+# Install in editable mode (Python 3.10+)
 pip install -e .
 
-# GUI indítása
+# Launch Desktop GUI
 gamestringer-gui
 ```
 
-### Függőségek
-
-- Python 3.11+
-- `click` vagy `typer` (CLI)
-- `lxml` (XLIFF kezelés)
-- `UnityPy` (Unity asset parsolás)
-- `polib` (PO export)
-- Opcionális: `IL2CppDumper` (IL2CPP metadata kinyeréshez)
+### Dependencies
+- Python 3.10+
+- `click>=8.0.0`
+- `pyyaml>=6.0`
+- `jsonschema>=4.20`
+- `polib>=1.2`
+- **Antigravity CLI** (`agy` on PATH, authenticated via `agy auth login`)
 
 ---
 
-## 🚀 Gyorsindítás
+## 🖥️ Desktop GUI Tabs (`gamestringer-gui`)
 
-### 1. Engine detektálás
+1. **📁 Projects Tab**: List, scaffold, and configure `project.yaml` files (languages, format adapters, batch globs, character replacements, category rules).
+2. **🔍 Preflight & Fixes Tab**: Run Hungarian font compatibility checks on Unity/IL2CPP assets and recalculate Addressables `catalog.json` CRC32 checksums.
+3. **🔇 Audit Noise Tab**: Run `locpipe audit` to view translatable text vs. engine noise, and one-click append exclusion patterns to `project.yaml`.
+4. **🚀 Plan & Run Tab**: Run dry pre-flight token estimates (`locpipe plan`) and execute live Antigravity CLI translation (`locpipe run`) with real-time log streaming.
 
+---
+
+## ⚙️ CLI Reference
+
+### LocPipe CLI (`locpipe`)
 ```bash
-gamestringer detect --input "/path/to/game"
+# Scaffold a new project
+locpipe init <project_name>
+
+# Pre-flight plan and token estimate (dry run, 0 API tokens)
+locpipe plan --project locpipe/projects/<project_name>
+
+# Audit extraction noise and format excludes (no LLM calls)
+locpipe audit --project locpipe/projects/<project_name>
+
+# Run translation pipeline with Antigravity CLI
+locpipe run --project locpipe/projects/<project_name>
 ```
 
-### 2. Szöveg kinyerése XLIFF-be
-
+### GameStringer Utilities (`gamestringer`)
 ```bash
-# Unity Mono játék
-gamestringer extract --engine unity --input "/path/to/unity_game" --output game.xliff
+# Check Unity/IL2CPP font assets for Hungarian ő/ű glyph support
+gamestringer check-fonts --input "path/to/game_dir" --engine unity
 
-# Unreal Engine
-gamestringer extract --engine unreal --input "Game.locres" --output game.xliff
-
-# Ren'Py
-gamestringer extract --engine renpy --input "/path/to/renpy_game" --output game.xliff
-
-# IL2CPP (auto-detect IL2CppDumper-rel)
-gamestringer extract --engine il2cpp --input "/path/to/il2cpp_game" --output game.xliff --il2cppdumper-path "C:/Tools/IL2CppDumper/IL2CppDumper.exe"
-```
-
-### 3. XLIFF lefordítása & QA ellenőrzés
-
-A pipeline-od vagy CAT tool-od (OmegaT, memoQ, stb.) lefordítja az XLIFF-et. A `<target>` mezőkbe kerül a fordítás.
-
-```bash
-# After translating, check quality before patching
-gamestringer check-quotes --xliff game_hu.xliff
-gamestringer check-fonts --input /path/to/game --engine unity
-```
-
-### 4. Visszapattintás
-
-```bash
-# Unity Mono — in-place patch backup-kel
-gamestringer patch --engine unity --input "/path/to/unity_game" --xliff game_hu.xliff --output game_patched
-
-# Ren'Py — `game/tl/hu/` mappa generálás
-gamestringer patch --engine renpy --input "/path/to/renpy_game" --xliff game_hu.xliff
-
-# IL2CPP — asset patch + XUnity pre-trans fájl generálás
-gamestringer patch --engine il2cpp --input "/path/to/il2cpp_game" --xliff game_hu.xliff --output game_patched
-```
-
-### 5. Quality Assurance Commands
-
-#### Quote Consistency Check
-Detects quote mismatches between source and target strings that may break game rendering:
-```bash
-gamestringer check-quotes --xliff translated.xliff
-gamestringer check-quotes --xliff translated.xliff --output report.json
-```
-Detects: unbalanced quotes, missing quotes, mismatched styles (straight vs Hungarian vs curly).
-Exit code 0 = clean, 1 = issues found (CI-friendly).
-
-#### Hungarian Font Glyph Check
-Checks if Unity game fonts support Hungarian characters (őűŐŰ):
-```bash
-gamestringer check-fonts --input /path/to/game --engine unity
-```
-If no ő/ű support detected, warns and recommends using ô/û or replacing font.
-
-#### Addressables CRC Fix
-Recalculates CRC32 hashes in Unity Addressables catalog.json after patching:
-```bash
-# Automatic — runs after every Unity patch
-gamestringer patch --engine unity ...
-
-# Manual fallback
-gamestringer fix-catalog --input /path/to/game
+# Recalculate CRC32 checksums for modified AssetBundles and update catalog.json
+gamestringer fix-catalog --input "path/to/game_dir"
 ```
 
 ---
 
-## 🖥️ Tkinter GUI
-
-For a graphical interface, run:
-```bash
-gamestringer-gui
-```
-
-Features:
-- Browse buttons for folder/file selection
-- Auto-detect engine
-- Dry-run, Verbose, Skip-garbage checkboxes
-- Real-time progress bar and log console
-- Open XLIFF / Open Folder buttons
-- IL2CppDumper auto-detect and path configuration
-- Settings persistence
-
----
-
-## 🛠️ CLI Parancsok
-
-| Parancs | Leírás |
-|---------|--------|
-| `detect` | Engine auto-detektálás |
-| `extract` | Szöveg kinyerése XLIFF-be |
-| `patch` | Fordított XLIFF visszaírása |
-| `validate` | XLIFF ellenőrzés — untranslated count, token mismatch |
-| `update` | Diff mód Steam patch után (csak új/módosult sztringek) |
-| `batch` | Több játék feldolgozása JSON config alapján |
-| `check-quotes` | Idézőjel konzisztencia ellenőrzés |
-| `check-fonts` | Magyar ő/ű karakter támogatás ellenőrzése |
-| `fix-catalog` | Addressables catalog.json CRC32 újraszámítás |
-| `setup-il2cppdumper` | IL2CppDumper keresése/beállítása |
-| `gamestringer-gui` | Tkinter GUI indítása |
-
-### Hasznos flag-ek
-
-```bash
---dry-run          # Szimuláció, nem ír fájlt
---verbose          # Részletes logolás
---quiet            # Csak hibák
---skip-garbage     # IL2CPP metadata szemétszűrés (ajánlott)
---il2cppdumper-path # Egyedi IL2CppDumper útvonal
-```
-
----
-
-## 🔧 Pipeline Integráció
-
-A tool **exit code 0/1**-et ad vissza, így shell scriptekbe és CI pipeline-okba könnyen beépíthető:
-
-```bash
-# Bash példa
-gamestringer extract --engine unity --input "$GAME_PATH" --output "$XLIFF_PATH" || exit 1
-
-# Validálás — ha nincs 100%-os fordítás, hiba
-gamestringer validate --xliff "$XLIFF_PATH" || echo "Nem minden sztring fordított!"
-gamestringer check-quotes --xliff "$XLIFF_PATH" || echo "Idézőjel hiba található!"
-```
-
-### A pipeline feladata (nem a CLI-é)
-
-| Feladat | Ki csinálja? |
-|---------|-------------|
-| Szöveg kinyerése | ✅ GameStringer CLI |
-| Fordítás (HU) | 🔧 A te pipeline-od / CAT tool-od |
-| Nyelvszűrés (pl. csak angol) | 🔧 Pipeline |
-| Visszapattintás | ✅ GameStringer CLI |
-| Batch feldolgozás | ✅ Mindkettő (CLI batch vagy pipeline loop) |
-
----
-
-## 🛡️ Robustness Feature-ök
-
-- **Automatikus backup** minden patch előtt (`.bak_<timestamp>`)
-- **Corrupt file skip** — egy sérült fájl nem állítja meg az egész kinyerést
-- **Smart String token validáció** — figyelmeztet, ha `{0}` vagy `{player_name}` hiányzik a fordításból
-- **NFC Unicode normalizálás** — kritikus magyar ékezetekhez (ő/ű)
-- **300MB file size limit** — OOM védelem nagy asset bundle-öknél
-- **UTF-16 surrogate protection** — nem crashel furcsa Unicode karaktereknél
-- **C# Type Reference szűrés** — `AssemblyQualifiedName` és namespace szemét kiszűrése
-- **IL2CPP metadata garbage filter** — 375k nyers sztring → ~14k valódi sztring
-- **Quote consistency validation** (`check-quotes`)
-- **Hungarian font glyph detection** (`check-fonts`)
-- **Automatic Addressables CRC32 recalculation** after Unity patch
-
----
-
-## 🎮 Tesztelt Játékok
-
-| Játék | Engine | Sztringek | Státusz |
-|-------|--------|-----------|---------|
-| **Children of Morta** | Unity Mono | ~50k–134k | ✅ Extract + Patch OK |
-| **Sunderfolk** | Unity IL2CPP | ~14k–31k (filtered) | ✅ IL2CppDumper + fallback OK |
-
----
-
-## 📁 Projekt Struktúra
+## 📂 Project Structure
 
 ```
-gamestringer_cli/
-├── gamestringer/
-│   ├── cli.py                 # CLI entry point (Click/Typer)
-│   ├── gui.py                 # Tkinter GUI wrapper
-│   ├── core/
-│   │   ├── base_engine.py     # Abstract BaseEngine (detect/extract/patch)
-│   │   ├── xliff_exporter.py  # XLIFF 1.2 olvasás/írás
-│   │   ├── po_exporter.py     # GNU PO fallback
-│   │   ├── quote_checker.py   # Idézőjel csekker
-│   │   ├── font_checker.py    # Betűtípus csekker
-│   │   ├── addressables_crc.py# CRC hash igazító
-│   │   └── backup.py          # Backup kezelés
-│   └── engines/
-│       ├── unity_mono.py      # Unity Mono (UnityPy)
-│       ├── il2cpp_hybrid.py   # Unity IL2CPP Hybrid
-│       ├── unreal.py          # Unreal .locres bináris
-│       ├── renpy.py           # Ren'Py .rpy szkriptek
-│       └── cri.py             # CRI Middleware MSG/BMD/FTD
-├── tests/
-│   └── test_cli.py            # Unit és integration tesztek
-├── pyproject.toml             # Package config + entry points
-└── README.md                  # Ez a fájl
+GameStringer-main/
+├── gamestringer/                  # GUI and standalone preflight/post-patch utilities
+│   ├── cli.py                     # check-fonts & fix-catalog Click commands
+│   ├── __main__.py                # CLI / GUI entry point
+│   ├── core/                      # font_checker, addressables_crc, backup, quote_checker, logger
+│   └── desktop_gui/               # 4-tab Tkinter GUI (app.py, theme.py, tabs/)
+├── locpipe/                       # LocPipe deterministic translation engine
+│   ├── pyproject.toml             # Standalone locpipe package spec
+│   ├── src/locpipe/               # Pipeline, adapters (uabea_json, po, unity, xliff), providers (antigravity_cli)
+│   └── tests/                     # LocPipe test suite
+├── archive/                       # Archived legacy extraction scripts & test packs
+├── pyproject.toml                 # Root unified package configuration
+└── test_cli.py                    # GameStringer utility test suite
 ```
-
----
-
-## ⚠️ Ismert Limitációk
-
-| Limitáció | Magyarázat |
-|-----------|------------|
-| **UE3** | Nem támogatott (`.upk`, `.int` — teljesen más formátum) |
-| **IL2CPP runtime** | A kódban lévő sztringekhez XUnity.AutoTranslator + BepInEx 6 IL2CPP kell (pre-trans fájl generálás működik) |
-| **AES titkosított `.pak`** | Unreal-nél előbb ki kell nyerni a `.pak`-ot (QuickBMS / unrealpak), utána megy a tool |
-| **Anti-cheat** | Csak single-player/offline játékokhoz! EAC/BattlEye/Vanguard tiltja a módosítást |
-
----
-
-## 📝 License
-
-Source-Available License v1.1 (ugyanaz, mint az eredeti GameStringer).
-
----
-
-## 🙏 Eredeti Projekt
-
-Ez a tool a [GameStringer](https://github.com/LoginRs99/GameStringer) projektből lett forkolva és lecsupaszítva. Köszönet az eredeti fejlesztőnek (Davide / @rouges78) a parser logikáért és az inspirációért.

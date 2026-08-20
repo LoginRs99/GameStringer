@@ -1,0 +1,53 @@
+[
+  {
+    "id": "ui_settings_confirm_01",
+    "source": "Confirm",
+    "target": "",
+    "notes": []
+  },
+  {
+    "id": "ui_settings_confirm_02",
+    "source": "Confirm",
+    "target": "",
+    "notes": []
+  },
+  {
+    "id": "ui_settings_confirm_03",
+    "source": "Confirm",
+    "target": "",
+    "notes": []
+  },
+  {
+    "id": "ui_welcome_message",
+    "source": "Welcome, {playerName}!",
+    "target": "",
+    "notes": [],
+    "max_length": 40
+  },
+  {
+    "id": "dlg_kael_thanks_01",
+    "source": "Thanks!",
+    "target": "",
+    "notes": [],
+    "speaker": "Kael"
+  },
+  {
+    "id": "dlg_narrator_thanks_01",
+    "source": "Thanks!",
+    "target": "",
+    "notes": [],
+    "speaker": "Narrator"
+  },
+  {
+    "id": "CombatEncounterManagerNode_weight_001",
+    "source": "Encounter weight affinity recalculated for the active node.",
+    "target": "",
+    "notes": []
+  },
+  {
+    "id": "ui_settings_cancel_01",
+    "source": "Cancel",
+    "target": "M\u00e9gse",
+    "notes": []
+  }
+]
