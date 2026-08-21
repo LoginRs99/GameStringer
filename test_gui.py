@@ -1,5 +1,5 @@
 """
-Unit and Interaction Test Suite for GameStringer Desktop GUI.
+Unit and Interaction Test Suite for GameStringer Desktop GUI (Editorial Restyle).
 """
 
 from __future__ import annotations
@@ -16,6 +16,11 @@ import pytest
 import yaml
 
 from gamestringer.desktop_gui.app import create_app, GameStringerApp, SETTINGS_FILE
+from gamestringer.desktop_gui.glyph_strip import GlyphStrip
+from gamestringer.desktop_gui.theme import (
+    BG_BASE, BG_SURFACE, BG_INSET, FG_TEXT, FG_MUTED,
+    ACCENT_INK, ACCENT_MOSS, ACCENT_PAPRIKA, ACCENT_AMBER
+)
 from gamestringer.desktop_gui.tooltip import ToolTip, create_tooltip
 from gamestringer.desktop_gui.widgets import labeled_entry, labeled_combo, labeled_checkbutton
 from gamestringer.desktop_gui.tabs.projects_tab import ProjectsTab, CategoryEditDialog
@@ -50,8 +55,23 @@ def test_tooltip_creation_and_events(tk_root):
     assert tip.tip_window is None
 
 
+def test_glyph_strip_widget(tk_root):
+    strip = GlyphStrip(tk_root)
+    assert strip.lbl_glyphs.cget("text") == "ő  ű  Ő  Ű"
+    assert strip.lbl_glyphs.cget("fg") == FG_MUTED
+
+    # Supported result
+    strip.update_result("supported", "Arial")
+    assert strip.lbl_glyphs.cget("fg") == ACCENT_MOSS
+    assert "Supported" in strip.lbl_status.cget("text")
+
+    # Missing / Unsupported result
+    strip.update_result("unsupported", None)
+    assert strip.lbl_glyphs.cget("fg") == ACCENT_PAPRIKA
+    assert "Missing" in strip.lbl_status.cget("text")
+
+
 def test_projects_tab_json_validation_blocks_bad_save(tk_root, tmp_path):
-    # Setup test project
     proj_dir = tmp_path / "locpipe" / "projects" / "test_game"
     proj_dir.mkdir(parents=True)
     (proj_dir / "project.yaml").write_text(yaml.dump({
@@ -63,7 +83,7 @@ def test_projects_tab_json_validation_blocks_bad_save(tk_root, tmp_path):
     }), encoding="utf-8")
 
     with patch("gamestringer.desktop_gui.tabs.projects_tab.get_default_projects_dir", return_value=tmp_path / "locpipe" / "projects"):
-        tab = ProjectsTab(tk.ttk.Notebook(tk_root), tk_root)
+        tab = ProjectsTab(tk.Frame(tk_root), tk_root)
         tab._load_project_by_name("test_game")
 
         # Set invalid JSON
@@ -73,7 +93,6 @@ def test_projects_tab_json_validation_blocks_bad_save(tk_root, tmp_path):
             success = tab.save_project()
             assert success is False
             assert mock_err.called
-            # Verify field was NOT silently reset to {}
             assert tab.var_char_replacements.get() == "{bad_json: invalid"
 
 
@@ -88,7 +107,7 @@ def test_projects_tab_dirty_tracking(tk_root, tmp_path):
     }), encoding="utf-8")
 
     with patch("gamestringer.desktop_gui.tabs.projects_tab.get_default_projects_dir", return_value=tmp_path / "locpipe" / "projects"):
-        tab = ProjectsTab(tk.ttk.Notebook(tk_root), tk_root)
+        tab = ProjectsTab(tk.Frame(tk_root), tk_root)
         tab._load_project_by_name("test_game")
         assert tab.is_dirty is False
 
@@ -98,22 +117,11 @@ def test_projects_tab_dirty_tracking(tk_root, tmp_path):
 
 
 def test_preflight_tab_engine_dropdown_options(tk_root):
-    tab = PreflightTab(tk.ttk.Notebook(tk_root), tk_root)
-    # Target engine combobox values must only be unity and il2cpp
-    combo = None
-    for child in tab.winfo_children():
-        for sub in child.winfo_children():
-            for sub2 in sub.winfo_children():
-                if isinstance(sub2, tk.ttk.Combobox):
-                    combo = sub2
-                    break
-
-    # Check var values
+    tab = PreflightTab(tk.Frame(tk_root), tk_root)
     assert tab.var_font_engine.get() in ["unity", "il2cpp"]
 
 
-def test_shared_project_selection(tk_root, tmp_path):
-    # Setup two test projects
+def test_sidebar_navigation_and_switching(tk_root, tmp_path):
     p1 = tmp_path / "locpipe" / "projects" / "proj_alpha"
     p2 = tmp_path / "locpipe" / "projects" / "proj_beta"
     p1.mkdir(parents=True)
@@ -126,15 +134,21 @@ def test_shared_project_selection(tk_root, tmp_path):
          patch("gamestringer.desktop_gui.tabs.run_tab.get_default_projects_dir", return_value=tmp_path / "locpipe" / "projects"):
 
         app = GameStringerApp(tk_root)
-        app.tab_projects.refresh_project_list()
-        app.tab_audit.refresh_projects()
-        app.tab_run.refresh_projects()
+        assert len(app.nav_items) == 4
+        assert app.current_tab_index == 0
+
+        # Switch to Audit tab (index 2)
+        app.switch_tab(2)
+        assert app.current_tab_index == 2
+        assert app.nav_items[2].is_active is True
+        assert app.nav_items[0].is_active is False
 
         # Switch project via ProjectsTab
         app.tab_projects.select_project("proj_beta")
         assert app.shared_project_var.get() == "proj_beta"
         assert app.tab_audit.var_selected_project.get() == "proj_beta"
         assert app.tab_run.var_selected_project.get() == "proj_beta"
+        assert "proj_beta" in app.lbl_active_proj.cget("text")
 
 
 def test_run_tab_confirmation_dialog(tk_root, tmp_path):
@@ -143,7 +157,7 @@ def test_run_tab_confirmation_dialog(tk_root, tmp_path):
     (p1 / "project.yaml").write_text("project: proj_run_test\nsource_lang: en\ntarget_lang: hu\nformat: uabea_json\n", encoding="utf-8")
 
     with patch("gamestringer.desktop_gui.tabs.run_tab.get_default_projects_dir", return_value=tmp_path / "locpipe" / "projects"):
-        tab = RunTab(tk.ttk.Notebook(tk_root), tk_root)
+        tab = RunTab(tk.Frame(tk_root), tk_root)
         tab.select_project("proj_run_test")
 
         # When user clicks Cancel on confirmation, no process is started
@@ -159,8 +173,10 @@ def test_settings_persistence(tk_root, tmp_path):
     with patch("gamestringer.desktop_gui.app.SETTINGS_FILE", test_settings):
         app = GameStringerApp(tk_root)
         app.shared_project_var.set("saved_project_xyz")
+        app.current_tab_index = 2
         app._save_settings()
 
         assert test_settings.exists()
         saved = json.loads(test_settings.read_text(encoding="utf-8"))
         assert saved["last_project"] == "saved_project_xyz"
+        assert saved["last_tab"] == 2

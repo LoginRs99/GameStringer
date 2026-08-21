@@ -20,8 +20,8 @@ from locpipe.config import load_project
 from locpipe.pipeline import plan
 from gamestringer.desktop_gui.tabs.projects_tab import get_default_projects_dir
 from gamestringer.desktop_gui.theme import (
-    BG_DARK, BG_CARD, BG_ENTRY, FG_TEXT, FG_MUTED,
-    ACCENT_CYAN, ACCENT_EMERALD, ACCENT_MAGENTA,
+    BG_BASE, BG_SURFACE, BG_INSET, FG_TEXT, FG_MUTED,
+    ACCENT_INK, ACCENT_MOSS, ACCENT_PAPRIKA, ACCENT_AMBER,
     FONT_TITLE, FONT_HEADING, FONT_BODY, FONT_MONO
 )
 from gamestringer.desktop_gui.tooltip import create_tooltip
@@ -33,7 +33,7 @@ from gamestringer.desktop_gui.widgets import (
 class RunTab(ttk.Frame):
     def __init__(
         self,
-        parent: ttk.Notebook,
+        parent: tk.Widget,
         root: tk.Tk,
         shared_project_var: Optional[tk.StringVar] = None,
         on_project_changed_callback: Optional[Callable[[str], None]] = None
@@ -62,7 +62,7 @@ class RunTab(ttk.Frame):
         top_bar = ttk.Frame(main_frame, style="Card.TFrame", padding=10)
         top_bar.pack(fill=tk.X, pady=(0, 10))
 
-        ttk.Label(top_bar, text="Project:", font=FONT_HEADING, background=BG_CARD, foreground=ACCENT_CYAN).pack(side=tk.LEFT, padx=(5, 5))
+        ttk.Label(top_bar, text="Project:", font=FONT_HEADING, background=BG_SURFACE, foreground=ACCENT_INK).pack(side=tk.LEFT, padx=(5, 5))
 
         self.var_selected_project = tk.StringVar()
         self.combo_project = ttk.Combobox(
@@ -116,7 +116,7 @@ class RunTab(ttk.Frame):
             stat_row,
             text="Ready. Select a project and run Plan to estimate tokens, or Run to start translation.",
             font=FONT_BODY,
-            bg=BG_CARD,
+            bg=BG_SURFACE,
             fg=FG_TEXT,
             justify=tk.LEFT
         )
@@ -126,8 +126,8 @@ class RunTab(ttk.Frame):
             stat_row,
             text="",
             font=FONT_MONO,
-            bg=BG_CARD,
-            fg=ACCENT_CYAN
+            bg=BG_SURFACE,
+            fg=ACCENT_INK
         )
         self.lbl_timer.pack(side=tk.RIGHT, padx=(10, 0))
 
@@ -140,7 +140,7 @@ class RunTab(ttk.Frame):
         log_frame = section_frame(main_frame, "Live Output & Logging Console", padding=8)
         log_frame.pack(fill=tk.BOTH, expand=True)
 
-        self.txt_log = tk.Text(log_frame, bg=BG_ENTRY, fg=FG_TEXT, font=FONT_MONO, bd=1, wrap=tk.CHAR)
+        self.txt_log = tk.Text(log_frame, bg=BG_INSET, fg=FG_TEXT, font=FONT_MONO, bd=1, wrap=tk.CHAR)
         scroll = ttk.Scrollbar(log_frame, orient=tk.VERTICAL, command=self.txt_log.yview)
         self.txt_log.configure(yscrollcommand=scroll.set)
 
@@ -148,10 +148,10 @@ class RunTab(ttk.Frame):
         scroll.pack(side=tk.RIGHT, fill=tk.Y)
 
         # Color tags for console
-        self.txt_log.tag_config("cyan", foreground=ACCENT_CYAN)
-        self.txt_log.tag_config("green", foreground=ACCENT_EMERALD)
-        self.txt_log.tag_config("red", foreground=ACCENT_MAGENTA)
-        self.txt_log.tag_config("yellow", foreground="#ffea00")
+        self.txt_log.tag_config("cyan", foreground=ACCENT_INK)
+        self.txt_log.tag_config("green", foreground=ACCENT_MOSS)
+        self.txt_log.tag_config("red", foreground=ACCENT_PAPRIKA)
+        self.txt_log.tag_config("yellow", foreground=ACCENT_AMBER)
         self.txt_log.tag_config("muted", foreground=FG_MUTED)
 
     def refresh_projects(self):
@@ -231,7 +231,7 @@ class RunTab(ttk.Frame):
         self.btn_plan.config(state="disabled")
         self.pbar.pack(side=tk.LEFT, padx=5)
         self.pbar.start(10)
-        self.lbl_stats.config(text="Calculating plan and token estimates...", fg=ACCENT_CYAN)
+        self.lbl_stats.config(text="Calculating plan and token estimates...", fg=ACCENT_INK)
 
         def worker():
             try:
@@ -249,7 +249,7 @@ class RunTab(ttk.Frame):
 
         if error:
             self._log(f"\n[ERROR] Plan failed: {error}\n", "red")
-            self.lbl_stats.config(text=f"Plan failed: {error}", fg=ACCENT_MAGENTA)
+            self.lbl_stats.config(text=f"Plan failed: {error}", fg=ACCENT_PAPRIKA)
             return
 
         self.has_run_plan_in_session = True
@@ -265,7 +265,7 @@ class RunTab(ttk.Frame):
             f"Project: {config.project} | Batches: {res.batch_count} | Unique Entries: {res.unique_entries_count:,}\n"
             f"Estimated Tokens: ~{res.estimated_input_tokens:,} in / ~{res.estimated_output_tokens:,} out (0 API cost for plan)"
         )
-        self.lbl_stats.config(text=stat_text, fg=ACCENT_CYAN)
+        self.lbl_stats.config(text=stat_text, fg=ACCENT_INK)
 
     def _start_translation(self):
         if not self.current_project_dir:
@@ -279,7 +279,6 @@ class RunTab(ttk.Frame):
         limit_val = self.var_limit.get().strip()
         limit_desc = f"{limit_val} batch(es) only" if limit_val.isdigit() else "NO LIMIT (Full Project)"
 
-        # Data safety confirmation
         warning_msg = (
             f"Launch Live Translation Run?\n\n"
             f"• Project: {proj_name}\n"
@@ -323,7 +322,7 @@ class RunTab(ttk.Frame):
             cmd.extend(["--limit", limit_val])
 
         self._log(f"\n>>> Starting pipeline: {' '.join(cmd)}\n", "cyan")
-        self.lbl_stats.config(text=f"Translation in progress for '{proj_name}' via Antigravity CLI...", fg=ACCENT_EMERALD)
+        self.lbl_stats.config(text=f"Translation in progress for '{proj_name}' via Antigravity CLI...", fg=ACCENT_MOSS)
 
         def worker():
             env = os.environ.copy()
@@ -394,8 +393,8 @@ class RunTab(ttk.Frame):
 
         if exit_code == 0:
             self._log("\n✅ Pipeline completed successfully!\n", "green")
-            self.lbl_stats.config(text="Pipeline execution completed successfully.", fg=ACCENT_EMERALD)
+            self.lbl_stats.config(text="Pipeline execution completed successfully.", fg=ACCENT_MOSS)
             self.btn_open_folder.pack(side=tk.LEFT, pady=(8, 0))
         else:
             self._log(f"\n❌ Pipeline exited with code {exit_code}\n", "red")
-            self.lbl_stats.config(text=f"Pipeline finished with exit code {exit_code}.", fg=ACCENT_MAGENTA)
+            self.lbl_stats.config(text=f"Pipeline finished with exit code {exit_code}.", fg=ACCENT_PAPRIKA)

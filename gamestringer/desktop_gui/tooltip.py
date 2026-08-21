@@ -1,5 +1,5 @@
 """
-Modern Dark-Themed Tooltip Component for Tkinter/TTK.
+Modern Editorial Tooltip Component for Tkinter/TTK.
 """
 
 from __future__ import annotations
@@ -8,7 +8,7 @@ import tkinter as tk
 from typing import Optional
 
 from gamestringer.desktop_gui.theme import (
-    BG_ENTRY, FG_TEXT, ACCENT_CYAN, FONT_FAMILY
+    BG_INSET, FG_TEXT, ACCENT_INK, FONT_FAMILY
 )
 
 
@@ -64,8 +64,8 @@ class ToolTip:
 
         frame = tk.Frame(
             tw,
-            bg=BG_ENTRY,
-            highlightbackground=ACCENT_CYAN,
+            bg=BG_INSET,
+            highlightbackground=ACCENT_INK,
             highlightthickness=1,
             padx=8,
             pady=5
@@ -76,7 +76,7 @@ class ToolTip:
             frame,
             text=self.text,
             justify=tk.LEFT,
-            bg=BG_ENTRY,
+            bg=BG_INSET,
             fg=FG_TEXT,
             font=(FONT_FAMILY, 9),
             wraplength=380

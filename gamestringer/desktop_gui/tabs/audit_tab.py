@@ -16,8 +16,8 @@ from locpipe.config import load_project, ProjectConfig
 from locpipe.adapters.registry import get_adapter
 from gamestringer.desktop_gui.tabs.projects_tab import get_default_projects_dir
 from gamestringer.desktop_gui.theme import (
-    BG_DARK, BG_CARD, BG_ENTRY, FG_TEXT, FG_MUTED,
-    ACCENT_CYAN, ACCENT_EMERALD, ACCENT_MAGENTA,
+    BG_BASE, BG_SURFACE, BG_INSET, FG_TEXT, FG_MUTED,
+    ACCENT_INK, ACCENT_MOSS, ACCENT_PAPRIKA, ACCENT_AMBER,
     FONT_TITLE, FONT_HEADING, FONT_BODY, FONT_MONO
 )
 from gamestringer.desktop_gui.tooltip import create_tooltip
@@ -29,7 +29,7 @@ from gamestringer.desktop_gui.widgets import (
 class AuditTab(ttk.Frame):
     def __init__(
         self,
-        parent: ttk.Notebook,
+        parent: tk.Widget,
         root: tk.Tk,
         shared_project_var: Optional[tk.StringVar] = None,
         on_project_changed_callback: Optional[Callable[[str], None]] = None
@@ -55,7 +55,7 @@ class AuditTab(ttk.Frame):
         top_bar = ttk.Frame(main_frame, style="Card.TFrame", padding=8)
         top_bar.pack(fill=tk.X, pady=(0, 10))
 
-        ttk.Label(top_bar, text="Project:", font=FONT_HEADING, background=BG_CARD, foreground=ACCENT_CYAN).pack(side=tk.LEFT, padx=(5, 5))
+        ttk.Label(top_bar, text="Project:", font=FONT_HEADING, background=BG_SURFACE, foreground=ACCENT_INK).pack(side=tk.LEFT, padx=(5, 5))
 
         self.var_selected_project = tk.StringVar()
         self.combo_project = ttk.Combobox(
@@ -85,7 +85,7 @@ class AuditTab(ttk.Frame):
 
         self.pbar = progress_bar(top_bar, mode="indeterminate", length=140)
 
-        self.lbl_status = tk.Label(top_bar, text="", font=FONT_BODY, bg=BG_CARD, fg=ACCENT_EMERALD)
+        self.lbl_status = tk.Label(top_bar, text="", font=FONT_BODY, bg=BG_SURFACE, fg=ACCENT_MOSS)
         self.lbl_status.pack(side=tk.LEFT, padx=10)
 
         # Summary Metrics Frame
@@ -96,7 +96,7 @@ class AuditTab(ttk.Frame):
             self.summary_frame,
             text="Select a project and click 'Run Extraction Audit' to inspect translatable text vs. engine noise.",
             font=FONT_BODY,
-            bg=BG_CARD,
+            bg=BG_SURFACE,
             fg=FG_TEXT,
             justify=tk.LEFT
         )
@@ -206,7 +206,7 @@ class AuditTab(ttk.Frame):
         self.btn_run.config(state="disabled")
         self.pbar.pack(side=tk.LEFT, padx=5)
         self.pbar.start(10)
-        self.lbl_status.config(text="Scanning batch files...", fg=ACCENT_CYAN)
+        self.lbl_status.config(text="Scanning batch files...", fg=ACCENT_INK)
 
         def worker():
             records = []
@@ -259,7 +259,7 @@ class AuditTab(ttk.Frame):
         self.audit_records = records
 
         if special_msg:
-            self.lbl_metrics.config(text=special_msg, fg=ACCENT_CYAN)
+            self.lbl_metrics.config(text=special_msg, fg=ACCENT_INK)
             self._render_records([])
             return
 
@@ -338,7 +338,7 @@ class AuditTab(ttk.Frame):
             if pattern not in excludes and json_path not in excludes:
                 excludes.append(pattern)
                 cfg_file.write_text(yaml.dump(cfg, sort_keys=False, allow_unicode=True), encoding="utf-8")
-                self.lbl_status.config(text=f"🚫 Excluded pattern '{pattern}' in project.yaml", fg=ACCENT_CYAN)
+                self.lbl_status.config(text=f"🚫 Excluded pattern '{pattern}' in project.yaml", fg=ACCENT_INK)
                 messagebox.showinfo("Path Excluded", f"Added '{pattern}' to format_options.uabea_json_path_exclude in project.yaml.", parent=self.root)
                 self._start_audit()
             else:

@@ -14,8 +14,8 @@ from typing import Any, Callable, Dict, List, Optional
 import yaml
 
 from gamestringer.desktop_gui.theme import (
-    BG_DARK, BG_CARD, BG_ENTRY, FG_TEXT, FG_MUTED,
-    ACCENT_CYAN, ACCENT_EMERALD, ACCENT_MAGENTA,
+    BG_BASE, BG_SURFACE, BG_INSET, FG_TEXT, FG_MUTED,
+    ACCENT_INK, ACCENT_MOSS, ACCENT_PAPRIKA, ACCENT_AMBER,
     FONT_TITLE, FONT_HEADING, FONT_BODY, FONT_MONO, FONT_FAMILY
 )
 from gamestringer.desktop_gui.tooltip import create_tooltip
@@ -47,7 +47,7 @@ class CategoryEditDialog(tk.Toplevel):
         self.title("Edit Category Rule" if category_data else "New Category Rule")
         self.geometry("520x540")
         self.minsize(480, 480)
-        self.configure(bg=BG_DARK)
+        self.configure(bg=BG_BASE)
         self.transient(parent.winfo_toplevel())
         self.grab_set()
 
@@ -195,7 +195,7 @@ class CategoryEditDialog(tk.Toplevel):
 class ProjectsTab(ttk.Frame):
     def __init__(
         self,
-        parent: ttk.Notebook,
+        parent: tk.Widget,
         root: tk.Tk,
         shared_project_var: Optional[tk.StringVar] = None,
         on_project_changed_callback: Optional[Callable[[str], None]] = None
@@ -227,10 +227,10 @@ class ProjectsTab(ttk.Frame):
 
         self.project_listbox = tk.Listbox(
             left_frame,
-            bg=BG_ENTRY,
+            bg=BG_INSET,
             fg=FG_TEXT,
-            selectbackground=ACCENT_CYAN,
-            selectforeground="#000000",
+            selectbackground=ACCENT_INK,
+            selectforeground="#ffffff",
             font=FONT_BODY,
             bd=1,
             highlightthickness=0,
@@ -260,7 +260,7 @@ class ProjectsTab(ttk.Frame):
         right_frame = section_frame(paned, "⚙️ Project Configuration (project.yaml)", padding=15)
         paned.add(right_frame, weight=3)
 
-        canvas = tk.Canvas(right_frame, bg=BG_CARD, highlightthickness=0)
+        canvas = tk.Canvas(right_frame, bg=BG_SURFACE, highlightthickness=0)
         scrollbar = ttk.Scrollbar(right_frame, orient=tk.VERTICAL, command=canvas.yview)
         self.scrollable_form = ttk.Frame(canvas, style="Card.TFrame")
 
@@ -330,8 +330,8 @@ class ProjectsTab(ttk.Frame):
             r_prov,
             text="🔒 LLM Provider: antigravity_cli (model: gemini-3.7-flash) — Fixed across all projects",
             font=FONT_MONO,
-            bg=BG_ENTRY,
-            fg=ACCENT_EMERALD,
+            bg=BG_INSET,
+            fg=ACCENT_MOSS,
             padx=8,
             pady=4,
             relief="solid",
@@ -357,7 +357,7 @@ class ProjectsTab(ttk.Frame):
         r_cr = ttk.Frame(sec_opt, style="Card.TFrame")
         r_cr.pack(fill=tk.X, pady=4)
         lbl_cr = ttk.Label(r_cr, text="Character Replacements (JSON map, e.g. {\"ő\": \"ô\", \"ű\": \"û\"}):",
-                           font=FONT_BODY, background=BG_CARD, foreground=FG_TEXT)
+                           font=FONT_BODY, background=BG_SURFACE, foreground=FG_TEXT)
         lbl_cr.pack(anchor="w")
         create_tooltip(lbl_cr, "JSON mapping of characters to substitute in translations at merge time (for games with missing font glyphs)")
 
@@ -366,18 +366,18 @@ class ProjectsTab(ttk.Frame):
         self.entry_char_replacements.pack(fill=tk.X, pady=2)
         create_tooltip(self.entry_char_replacements, "Valid JSON dictionary mapping source characters to replacements, e.g. {\"ő\": \"ô\", \"ű\": \"û\"}")
 
-        self.lbl_json_error = tk.Label(r_cr, text="", font=(FONT_FAMILY, 9, "bold"), bg=BG_CARD, fg=ACCENT_MAGENTA)
+        self.lbl_json_error = tk.Label(r_cr, text="", font=(FONT_FAMILY, 9, "bold"), bg=BG_SURFACE, fg=ACCENT_PAPRIKA)
         self.lbl_json_error.pack(anchor="w")
 
         # UABEA JSON Path Exclude
         r_ex = ttk.Frame(sec_opt, style="Card.TFrame")
         r_ex.pack(fill=tk.X, pady=4)
         lbl_ex = ttk.Label(r_ex, text="UABEA JSON Path Excludes (one regex pattern per line):",
-                           font=FONT_BODY, background=BG_CARD, foreground=FG_TEXT)
+                           font=FONT_BODY, background=BG_SURFACE, foreground=FG_TEXT)
         lbl_ex.pack(anchor="w")
         create_tooltip(lbl_ex, "Regex patterns matched against dotted json_path (e.g. ^internal_metadata\\..* or ^debug_.*)")
 
-        self.txt_path_exclude = tk.Text(r_ex, height=4, bg=BG_ENTRY, fg=FG_TEXT, insertbackground=ACCENT_CYAN, font=FONT_MONO, bd=1)
+        self.txt_path_exclude = tk.Text(r_ex, height=4, bg=BG_INSET, fg=FG_TEXT, insertbackground=ACCENT_INK, font=FONT_MONO, bd=1)
         self.txt_path_exclude.pack(fill=tk.X, pady=2)
         create_tooltip(self.txt_path_exclude, "Regex patterns (one per line) to skip during typetree extraction without calling LLM")
 
@@ -418,7 +418,7 @@ class ProjectsTab(ttk.Frame):
                                         tooltip="Discard unsaved changes and reload project.yaml from disk")
         self.btn_reload.pack(side=tk.LEFT)
 
-        self.lbl_status = tk.Label(act_box, text="", font=FONT_BODY, bg=BG_CARD, fg=ACCENT_EMERALD)
+        self.lbl_status = tk.Label(act_box, text="", font=FONT_BODY, bg=BG_SURFACE, fg=ACCENT_MOSS)
         self.lbl_status.pack(side=tk.LEFT, padx=15)
 
         self._bind_dirty_events()
@@ -433,7 +433,7 @@ class ProjectsTab(ttk.Frame):
         if not self._suppress_dirty:
             self.is_dirty = True
             if self.current_project_path:
-                self.lbl_status.config(text="● Unsaved changes", fg=ACCENT_CYAN)
+                self.lbl_status.config(text="● Unsaved changes", fg=ACCENT_AMBER)
 
     def check_unsaved_changes(self) -> bool:
         """Prompt user if there are unsaved changes. Returns True if OK to proceed, False if canceled."""
@@ -468,7 +468,6 @@ class ProjectsTab(ttk.Frame):
         for proj in projects:
             self.project_listbox.insert(tk.END, proj)
 
-        # Select matching project or first
         target = self.shared_project_var.get() if self.shared_project_var else ""
         if target and target in projects:
             idx = projects.index(target)
@@ -511,7 +510,6 @@ class ProjectsTab(ttk.Frame):
             return
 
         if not self.check_unsaved_changes():
-            # Restore selection to previous project
             if self.current_project_path:
                 items = self.project_listbox.get(0, tk.END)
                 if self.current_project_path.name in items:
@@ -575,7 +573,7 @@ class ProjectsTab(ttk.Frame):
                 self._render_category_row(c)
 
             self.is_dirty = False
-            self.lbl_status.config(text=f"Loaded {name}", fg=ACCENT_EMERALD)
+            self.lbl_status.config(text=f"Loaded {name}", fg=ACCENT_MOSS)
         finally:
             self._suppress_dirty = False
 
@@ -691,7 +689,7 @@ class ProjectsTab(ttk.Frame):
             self.categories_list.append(dialog.result)
             self._render_category_row(dialog.result)
             self.is_dirty = True
-            self.lbl_status.config(text="● Unsaved changes", fg=ACCENT_CYAN)
+            self.lbl_status.config(text="● Unsaved changes", fg=ACCENT_AMBER)
 
     def _edit_selected_category(self):
         sel = self.tree_categories.selection()
@@ -716,7 +714,7 @@ class ProjectsTab(ttk.Frame):
                 dialog.result.get("max_expansion_ratio") if dialog.result.get("max_expansion_ratio") is not None else "default"
             ))
             self.is_dirty = True
-            self.lbl_status.config(text="● Unsaved changes", fg=ACCENT_CYAN)
+            self.lbl_status.config(text="● Unsaved changes", fg=ACCENT_AMBER)
 
     def _remove_category(self):
         sel = self.tree_categories.selection()
@@ -728,7 +726,7 @@ class ProjectsTab(ttk.Frame):
                 del self.categories_list[idx]
             self.tree_categories.delete(s)
         self.is_dirty = True
-        self.lbl_status.config(text="● Unsaved changes", fg=ACCENT_CYAN)
+        self.lbl_status.config(text="● Unsaved changes", fg=ACCENT_AMBER)
 
     def save_project(self) -> bool:
         if not self.current_project_path:
@@ -787,7 +785,7 @@ class ProjectsTab(ttk.Frame):
             cfg_path.write_text(yaml.dump(cfg, sort_keys=False, allow_unicode=True), encoding="utf-8")
             self.raw_config = cfg
             self.is_dirty = False
-            self.lbl_status.config(text="✅ Saved successfully!", fg=ACCENT_EMERALD)
+            self.lbl_status.config(text="✅ Saved successfully!", fg=ACCENT_MOSS)
             self.lbl_json_error.config(text="")
             self.root.after(3000, lambda: self.lbl_status.config(text=""))
             return True

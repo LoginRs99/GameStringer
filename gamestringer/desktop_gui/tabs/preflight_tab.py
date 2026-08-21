@@ -9,15 +9,15 @@ from pathlib import Path
 import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from typing import Optional
+from typing import Callable, Optional
 
 from gamestringer.core.font_checker import check_game_fonts
 from gamestringer.core.addressables_crc import fix_catalog_crc_command
 from gamestringer.core.backup import create_backup
 from gamestringer.desktop_gui.theme import (
-    BG_DARK, BG_CARD, BG_ENTRY, FG_TEXT, FG_MUTED,
-    ACCENT_CYAN, ACCENT_EMERALD, ACCENT_MAGENTA,
-    FONT_HEADING, FONT_BODY, FONT_MONO
+    BG_BASE, BG_SURFACE, BG_INSET, FG_TEXT, FG_MUTED,
+    ACCENT_INK, ACCENT_MOSS, ACCENT_PAPRIKA, ACCENT_AMBER,
+    FONT_TITLE, FONT_HEADING, FONT_BODY, FONT_MONO
 )
 from gamestringer.desktop_gui.tooltip import create_tooltip
 from gamestringer.desktop_gui.widgets import (
@@ -26,9 +26,15 @@ from gamestringer.desktop_gui.widgets import (
 
 
 class PreflightTab(ttk.Frame):
-    def __init__(self, parent: ttk.Notebook, root: tk.Tk):
+    def __init__(
+        self,
+        parent: tk.Widget,
+        root: tk.Tk,
+        on_font_check_result_callback: Optional[Callable[[str, Optional[str]], None]] = None
+    ):
         super().__init__(parent, style="TFrame")
         self.root = root
+        self.on_font_check_result_callback = on_font_check_result_callback
         self.is_font_checking = False
         self.is_crc_fixing = False
 
@@ -48,7 +54,7 @@ class PreflightTab(ttk.Frame):
             sec_font,
             text="Scans Unity assets for TextMeshPro (TMP_FontAsset) and standard Font objects to verify Hungarian glyph support (ő/ű/Ő/Ű).\nSupported engines: Unity Mono and Unity IL2CPP.",
             font=FONT_BODY,
-            bg=BG_CARD,
+            bg=BG_SURFACE,
             fg=FG_MUTED,
             justify=tk.LEFT
         )
@@ -86,7 +92,7 @@ class PreflightTab(ttk.Frame):
 
         self.pbar_font = progress_bar(r_eng, mode="indeterminate", length=140)
 
-        self.txt_font_result = tk.Text(sec_font, height=5, bg=BG_ENTRY, fg=FG_TEXT, font=FONT_MONO, bd=1, wrap=tk.WORD)
+        self.txt_font_result = tk.Text(sec_font, height=5, bg=BG_INSET, fg=FG_TEXT, font=FONT_MONO, bd=1, wrap=tk.WORD)
         self.txt_font_result.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
 
         # -------------------------------------------------------------
@@ -99,7 +105,7 @@ class PreflightTab(ttk.Frame):
             sec_crc,
             text="Recalculates CRC32 checksums for modified AssetBundles (.bundle / .assets) and updates catalog.json and *.hash files.\nRun this after reimporting modified translation files into Unity Addressables games.",
             font=FONT_BODY,
-            bg=BG_CARD,
+            bg=BG_SURFACE,
             fg=FG_MUTED,
             justify=tk.LEFT
         )
@@ -136,7 +142,7 @@ class PreflightTab(ttk.Frame):
 
         self.pbar_crc = progress_bar(r_crc_act, mode="indeterminate", length=140)
 
-        self.txt_crc_result = tk.Text(sec_crc, height=5, bg=BG_ENTRY, fg=FG_TEXT, font=FONT_MONO, bd=1, wrap=tk.WORD)
+        self.txt_crc_result = tk.Text(sec_crc, height=5, bg=BG_INSET, fg=FG_TEXT, font=FONT_MONO, bd=1, wrap=tk.WORD)
         self.txt_crc_result.pack(fill=tk.BOTH, expand=True, pady=(8, 0))
 
     def _browse_font_path(self):
@@ -189,19 +195,26 @@ class PreflightTab(ttk.Frame):
 
         if error:
             self.txt_font_result.insert(tk.END, f"[ERROR] Font check failed: {error}\n")
+            if self.on_font_check_result_callback:
+                self.on_font_check_result_callback("error", None)
             return
 
         status = res.get("status", "unknown")
         msg = res.get("message", "")
+        font_assets = res.get("font_assets", [])
+        font_name = font_assets[0] if font_assets else None
 
         self.txt_font_result.insert(tk.END, f"Status: [{status.upper()}]\n")
         self.txt_font_result.insert(tk.END, f"Engine: {res.get('engine', 'unity')}\n")
         self.txt_font_result.insert(tk.END, f"Result: {msg}\n")
 
-        if res.get("font_assets"):
+        if font_assets:
             self.txt_font_result.insert(tk.END, "\nDetected Font Assets:\n")
-            for fa in res["font_assets"]:
+            for fa in font_assets:
                 self.txt_font_result.insert(tk.END, f"  • {fa}\n")
+
+        if self.on_font_check_result_callback:
+            self.on_font_check_result_callback(status, font_name)
 
     def _start_crc_fix(self):
         path = self.var_crc_path.get().strip()
@@ -216,7 +229,6 @@ class PreflightTab(ttk.Frame):
         if self.is_crc_fixing:
             return
 
-        # Data safety confirmation
         do_backup = self.var_crc_backup.get()
         confirm = messagebox.askyesno(
             "Confirm CRC Fix",
@@ -238,7 +250,6 @@ class PreflightTab(ttk.Frame):
 
         def worker():
             try:
-                # Pre-scan backups if requested
                 backup_logs = []
                 if do_backup:
                     base_dir = os.path.abspath(path)

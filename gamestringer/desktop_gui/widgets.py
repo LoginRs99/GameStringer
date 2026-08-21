@@ -1,5 +1,5 @@
 """
-Reusable UI Widget Builders with Integrated Tooltips & Dark Styling.
+Reusable UI Widget Builders with Integrated Tooltips & Editorial Styling.
 """
 
 from __future__ import annotations
@@ -9,8 +9,8 @@ from tkinter import ttk
 from typing import Any, Callable, List, Optional, Tuple, Union
 
 from gamestringer.desktop_gui.theme import (
-    BG_CARD, BG_DARK, BG_ENTRY, FG_TEXT, FG_MUTED,
-    ACCENT_CYAN, FONT_HEADING, FONT_BODY, FONT_MONO
+    BG_SURFACE, BG_BASE, BG_INSET, FG_TEXT, FG_MUTED,
+    ACCENT_INK, FONT_HEADING, FONT_BODY, FONT_MONO
 )
 from gamestringer.desktop_gui.tooltip import create_tooltip
 
@@ -43,8 +43,8 @@ def labeled_entry(
         row,
         text=label_text,
         font=FONT_HEADING,
-        background=BG_CARD,
-        foreground=ACCENT_CYAN,
+        background=BG_SURFACE,
+        foreground=ACCENT_INK,
         width=label_width
     )
     lbl.pack(side=tk.LEFT)
@@ -76,8 +76,8 @@ def labeled_combo(
         row,
         text=label_text,
         font=FONT_HEADING,
-        background=BG_CARD,
-        foreground=ACCENT_CYAN,
+        background=BG_SURFACE,
+        foreground=ACCENT_INK,
         width=label_width
     )
     lbl.pack(side=tk.LEFT)
