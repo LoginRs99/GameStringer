@@ -37,6 +37,7 @@ If the source text contains gender markers like {ms|...}{fs|...}:
 - ALWAYS translate the text inside all gender slots into %%TARGET_LANG%%.
 - NEVER leave untranslated %%SOURCE_LANG%% words inside target gender slots.
 - Always preserve valid tag syntax ({ms|...}{fs|...}). Never output invalid or misspelled tag names (e.g. {mf|...}).
+- When a placeholder/tag sits adjacent to where a Hungarian case suffix or linking vowel would attach (e.g. {item}t, {item}ban), prefer rephrasing to avoid needing a suffix directly on the unknown placeholder rather than guessing a vowel-harmony-dependent ending.
 
 --- LENGTH RULES ---
 Keep the translation close in length to the source. Prefer the shorter of

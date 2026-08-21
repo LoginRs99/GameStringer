@@ -7,9 +7,25 @@ instead of the 100% the old per-batch QA agent re-read every time.
 
 from __future__ import annotations
 
+import re
 from typing import Optional
 
 from .models import Entry, ValidationResult
+
+_HU_LOWER = "a-záéíóöőúüű"
+_SUFFIX_NEAR_PLACEHOLDER_RE = re.compile(
+    rf"(\{{[^{{\}}\n]+\}}|@[^@\n]+@|%(?:\d+\$)?[0-9\.\-\+]*[sdfuxXgGcping]|</?[a-zA-Z0-9_\-=\#\.\s\"]+>|\[[A-Z0-9_\-\:\.]+\])([{_HU_LOWER}]{{1,3}})(?=[^{_HU_LOWER}]|$)"
+)
+
+
+def has_suffix_near_placeholder(target: str) -> bool:
+    """Heuristic detector: returns True if a protected token/placeholder is
+    immediately followed by 1-3 lowercase Hungarian letters (a plausible case
+    suffix like {item}t, {item}ban, {item}nak) without separating punctuation.
+    """
+    if not target:
+        return False
+    return bool(_SUFFIX_NEAR_PLACEHOLDER_RE.search(target))
 
 
 def _expansion_ratio_limit(entry: Entry, config) -> float:
@@ -41,6 +57,9 @@ def score(entry: Entry, validation: ValidationResult, config: Optional[object] =
 
     if entry.extra.get("_disputed_glossary_term_used"):
         s -= 0.2  # e.g. "Network" — Hálózat/Tévéadó — needs a human or reviewer call
+
+    if entry.extra.get("_suffix_near_placeholder") or has_suffix_near_placeholder(entry.target):
+        s -= 0.2  # Hungarian case suffix attached directly to runtime placeholder
 
     if (
         entry.target.strip()
@@ -82,7 +101,7 @@ def needs_review(entry: Entry, validation: ValidationResult, threshold: float, c
 def confidence_flags(entry: Entry, config: Optional[object] = None) -> list[str]:
     """Human-readable reasons for every *heuristic* (non-validator) deduction
     score() applied -- speaker uncertainty, disputed glossary term, identity
-    passthrough, max_length overrun, expansion-ratio overrun.
+    passthrough, max_length overrun, expansion-ratio overrun, placeholder suffix.
 
     These heuristics never produced a ValidationIssue, so before this an
     entry could land in the review queue with confidence 0.7 and an empty
@@ -107,6 +126,12 @@ def confidence_flags(entry: Entry, config: Optional[object] = None) -> list[str]
 
     if entry.extra.get("_disputed_glossary_term_used"):
         flags.append("uses a context-dependent (⚠) glossary term — verify the sense applied is correct")
+
+    if entry.extra.get("_suffix_near_placeholder") or has_suffix_near_placeholder(entry.target):
+        flags.append(
+            "placeholder is immediately followed by a Hungarian suffix (e.g. {item}t, {item}ban) — "
+            "verify vowel harmony or rephrase to avoid attaching suffixes directly to runtime tokens"
+        )
 
     if (
         entry.target.strip()

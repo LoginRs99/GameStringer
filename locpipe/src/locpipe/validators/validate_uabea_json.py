@@ -101,4 +101,10 @@ def validate_file(
                 # Basic token audit
                 pass
 
+    # Layer Hungarian spellchecker (minor severity only)
+    if target_lang.lower() == "hu":
+        from . import validate_hu_spelling
+        _, _, spell_minor, _ = validate_hu_spelling.validate_file(path_str, glossary_entries, target_lang=target_lang)
+        minor.extend(spell_minor)
+
     return critical, major, minor, info

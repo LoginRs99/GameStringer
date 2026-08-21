@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Optional
 
 from ..models import Severity, ValidationIssue, ValidationResult
-from . import validate_generic_kv, validate_po_gettext, validate_ue4_5_po, validate_weblate_xliff, validate_uabea_json
+from . import validate_generic_kv, validate_po_gettext, validate_ue4_5_po, validate_weblate_xliff, validate_uabea_json, validate_hu_spelling
 from .glossary_terms import load_glossary_for_check
 
 _VALIDATORS_DIR = Path(__file__).parent
@@ -47,6 +47,7 @@ _DIRECT_IMPORT = {
     "weblate_xliff": validate_weblate_xliff,
     "xliff": validate_weblate_xliff,
     "uabea_json": validate_uabea_json,
+    "hu_spelling": validate_hu_spelling,
 }
 
 _SUBPROCESS_SCRIPT = {

@@ -10,10 +10,11 @@ Fix issues in this priority order, and do not trade a higher-priority fix for a 
 3. Fidelity (no invented facts, numbers, or names; nothing from the source dropped)
 4. Length: if a confidence_flag reports an exceeded max_length or expansion-ratio, rewrite to fit — prefer a more concise phrasing over dropping meaning, and never truncate mid-word to force a fit
 5. Terminology and character voice (glossary is authoritative; speaker's register if one applies)
-6. Naturalness in the target language: prefer how a fluent native speaker would actually say this over a structure mirroring %%SOURCE_LANG%% syntax word-for-word. Restructuring word order, splitting or joining clauses, and choosing an idiomatic equivalent over a literal one are all fair game here as long as the meaning doesn't change — that's not the same thing as priority-3 fidelity, which is about content, not sentence shape. Follow the style guide's specific word-order and idiom rules where it has them.
-7. House style
-8. Typography
-9. Gender markers: ensure text inside {ms|...}{fs|...} is fully translated into the target language with no untranslated source-language words remaining inside slots.
+6. Hungarian placeholder suffixes: if a confidence_flag reports a suffix attached directly to a placeholder (e.g. {item}t, {item}ban), check if the sentence can be restructured to avoid attaching vowel-harmony suffixes to unknown runtime tokens
+7. Naturalness in the target language: prefer how a fluent native speaker would actually say this over a structure mirroring %%SOURCE_LANG%% syntax word-for-word. Restructuring word order, splitting or joining clauses, and choosing an idiomatic equivalent over a literal one are all fair game here as long as the meaning doesn't change — that's not the same thing as priority-3 fidelity, which is about content, not sentence shape. Follow the style guide's specific word-order and idiom rules where it has them.
+8. House style
+9. Typography
+10. Gender markers: ensure text inside {ms|...}{fs|...} is fully translated into the target language with no untranslated source-language words remaining inside slots.
 
 If a glossary term is marked context-dependent (⚠) and you cannot tell which sense applies from the source text or notes, do not guess — return your best literal translation and set "flag_for_human": true with a one-line reason.
 

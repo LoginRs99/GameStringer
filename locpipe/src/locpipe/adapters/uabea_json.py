@@ -230,6 +230,12 @@ class UABEAJsonAdapter(FormatAdapter):
 
         def walk(obj: Any, path_stack: List[str]):
             if isinstance(obj, dict):
+                # Sibling character limit check for Unity UI components (e.g. TMP_InputField m_CharacterLimit)
+                sibling_limit = None
+                char_lim = obj.get("m_CharacterLimit")
+                if isinstance(char_lim, int) and char_lim > 0:
+                    sibling_limit = char_lim
+
                 for k, v in obj.items():
                     if k in IGNORED_UNITY_KEYS:
                         continue
@@ -267,6 +273,7 @@ class UABEAJsonAdapter(FormatAdapter):
                                 key=entry_key,
                                 source=v,
                                 target="",
+                                max_length=sibling_limit,
                                 namespace=asset_name,
                                 notes=[f"path:{full_path_str}"],
                                 extra=extra,
@@ -305,12 +312,17 @@ class UABEAJsonAdapter(FormatAdapter):
                         "array_index": idx,
                         "id": row_id,
                     }
+                    item_limit = None
+                    char_lim = item.get("m_CharacterLimit")
+                    if isinstance(char_lim, int) and char_lim > 0:
+                        item_limit = char_lim
                     entries.append(
                         Entry(
                             file=str(path),
                             key=entry_key,
                             source=src_val,
                             target=tgt_val if isinstance(tgt_val, str) else "",
+                            max_length=item_limit,
                             namespace=asset_name,
                             extra=extra,
                         )
