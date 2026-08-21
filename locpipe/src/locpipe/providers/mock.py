@@ -26,7 +26,14 @@ class MockProvider(TranslationProvider):
 
     persists_to_tm = False
 
-    async def complete(self, system_prompt: str, user_payload: str, *, max_tokens: int = 8192) -> str:
+    async def complete(
+        self,
+        system_prompt: str,
+        user_payload: str,
+        *,
+        max_tokens: int = 8192,
+        effort: Optional[str] = None,
+    ) -> str:
         parsed = json.loads(user_payload)
 
         if isinstance(parsed, list):  # bulk-translation shape: [{"id","source",...}, ...]

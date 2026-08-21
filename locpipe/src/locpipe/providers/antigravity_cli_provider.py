@@ -101,13 +101,14 @@ class AntigravityCLIProvider(TranslationProvider):
         self.effort = effort or "low"
         self._semaphore = asyncio.Semaphore(max_concurrency)
 
-    def _run_agy(self, full_prompt: str) -> str:
+    def _run_agy(self, full_prompt: str, effort: Optional[str] = None) -> str:
         # To avoid Windows command-line character length limit (32,767 chars),
         # write the full prompt to a temporary UTF-8 text file and pass its path to `agy --print`.
         with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as temp_file:
             temp_file.write(full_prompt)
             temp_prompt_path = temp_file.name
 
+        effective_effort = effort or self.effort
         args = [
             _BINARY,
             "--print",
@@ -116,8 +117,8 @@ class AntigravityCLIProvider(TranslationProvider):
             "--dangerously-skip-permissions",
         ]
 
-        if ("gemini-3" in self.model or "gemini-2" in self.model) and self.effort:
-            args.extend(["--effort", self.effort])
+        if ("gemini-3" in self.model or "gemini-2" in self.model) and effective_effort:
+            args.extend(["--effort", effective_effort])
 
         max_attempts = 5
         last_exit_code = None
@@ -210,7 +211,14 @@ class AntigravityCLIProvider(TranslationProvider):
                 except Exception:
                     pass
 
-    async def complete(self, system_prompt: str, user_payload: str, *, max_tokens: int = 8192) -> str:
+    async def complete(
+        self,
+        system_prompt: str,
+        user_payload: str,
+        *,
+        max_tokens: int = 8192,
+        effort: Optional[str] = None,
+    ) -> str:
         full_prompt = (
             f"{system_prompt}\n\n--- INPUT ---\n{user_payload}\n\n"
             "Respond with ONLY the JSON array described above. No other text."
@@ -222,7 +230,7 @@ class AntigravityCLIProvider(TranslationProvider):
                 "Consider reducing category batch_size in project.yaml."
             )
         async with self._semaphore:
-            stdout = await asyncio.to_thread(self._run_agy, full_prompt)
+            stdout = await asyncio.to_thread(self._run_agy, full_prompt, effort)
 
         # Gate 3: does it actually parse as the shape we asked for? An agent
         # harness is more likely than a raw completion API to wrap output in

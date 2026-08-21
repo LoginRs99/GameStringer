@@ -115,6 +115,12 @@ class CategoryEditDialog(tk.Toplevel):
                                  tooltip="Regex matched against source text (e.g. argument-modifier syntax \\|(plural|gender)\\()")
         r_src.pack(fill=tk.X, pady=4)
 
+        # Effort Override
+        self.var_effort = tk.StringVar(value=self.data.get("effort") or "")
+        r_eff, _ = labeled_entry(form, "Effort Override:", self.var_effort, width=10, label_width=18,
+                                 tooltip="Optional per-category effort override for translation ('high' or 'low'). Leave blank for project default.")
+        r_eff.pack(fill=tk.X, pady=4)
+
         # Checkboxes frame
         chk_frame = ttk.Frame(form, style="Card.TFrame")
         chk_frame.pack(fill=tk.X, pady=8)
@@ -183,6 +189,8 @@ class CategoryEditDialog(tk.Toplevel):
             res["match_notes_regex"] = self.var_notes_regex.get().strip()
         if self.var_source_regex.get().strip():
             res["match_source_regex"] = self.var_source_regex.get().strip()
+        if self.var_effort.get().strip():
+            res["effort"] = self.var_effort.get().strip()
 
         self.result = res
         self.destroy()
@@ -620,7 +628,7 @@ class ProjectsTab(ttk.Frame):
                 "anti_fabrication_checklist": "resources/anti-fabrication-checklist.md",
             },
             "categories": [
-                {"name": "dialogue", "match_speaker_present": True, "needs_character_voice": True, "batch_size": 200, "max_expansion_ratio": 1.8},
+                {"name": "dialogue", "match_speaker_present": True, "needs_character_voice": True, "batch_size": 200, "max_expansion_ratio": 1.8, "effort": "high"},
                 {"name": "ui", "default": True, "needs_character_voice": False, "batch_size": 350, "max_expansion_ratio": 1.3}
             ],
             "provider": {

@@ -56,11 +56,14 @@ class CategoryRule:
     narrative_boundary_field: Optional[str] = None
     # How many immediately-preceding entries (within the same boundary
     # group, in original order) to attach as {speaker, source} context
-    # on each entry. 0 = disabled. Only meaningful alongside
+    # narrative_context_window: 0 = disabled. Only meaningful alongside
     # narrative_boundary_field -- without a boundary, "preceding" would
     # mean "whatever happened to be extracted right before this",
     # which can cross scene/file boundaries for no good reason.
     narrative_context_window: int = 0
+    # Per-category effort override for the bulk-translate pass (e.g. "low", "high").
+    # None = use the project-global provider.effort default.
+    effort: Optional[str] = None
 
     def matches(self, entry) -> bool:
         if self.match_speaker_present is not None:
@@ -127,7 +130,7 @@ class ProviderConfig:
     # more from the extra reasoning than it costs -- low is equally valid
     # if you'd rather optimize for speed/cost there instead.
     effort: str = "low"
-    review_effort: Optional[str] = None  # defaults to `effort` ("low") if unset
+    review_effort: Optional[str] = None  # defaults to "high" if unset
     escalation_model: Optional[str] = None  # defaults to `review_model` or `model` if unset
     escalation_effort: str = "high"
     escalation_enabled: bool = True
@@ -257,6 +260,7 @@ def load_project(project_dir: str | Path) -> ProjectConfig:
             default_max_length=c.get("default_max_length"),
             narrative_boundary_field=c.get("narrative_boundary_field"),
             narrative_context_window=c.get("narrative_context_window", 0),
+            effort=c.get("effort"),
         )
         for c in categories_raw
     ]
@@ -274,7 +278,7 @@ def load_project(project_dir: str | Path) -> ProjectConfig:
         max_output_tokens=provider_raw.get("max_output_tokens", 16384),
         review_model=provider_raw.get("review_model"),
         effort=provider_raw.get("effort", "low"),
-        review_effort=provider_raw.get("review_effort", "low"),
+        review_effort=provider_raw.get("review_effort", "high"),
         escalation_model=provider_raw.get("escalation_model", escalation_raw.get("model")),
         escalation_effort=provider_raw.get("escalation_effort", escalation_raw.get("effort", "high")),
         escalation_enabled=provider_raw.get("escalation_enabled", escalation_raw.get("enabled", True)),

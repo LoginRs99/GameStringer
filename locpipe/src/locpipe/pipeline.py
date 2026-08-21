@@ -76,6 +76,21 @@ def _attribute_issues(
     return by_key
 
 
+async def _call_complete(
+    provider: TranslationProvider,
+    system_prompt: str,
+    user_payload: str,
+    max_tokens: int,
+    effort: str | None = None,
+) -> str:
+    import inspect
+    sig = inspect.signature(provider.complete)
+    kwargs = {"max_tokens": max_tokens}
+    if "effort" in sig.parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
+        kwargs["effort"] = effort
+    return await provider.complete(system_prompt, user_payload, **kwargs)
+
+
 async def _translate_batches_sync(batches, config, glossary, provider: TranslationProvider, checkpoint, max_api_calls: int | None = None):
     """asyncio.as_completed, not asyncio.gather -- deliberately. gather()
     is all-or-nothing: one failing batch cancels the rest and nothing
@@ -110,12 +125,22 @@ async def _translate_batches_sync(batches, config, glossary, provider: Translati
         else:
             batch_glossary = glossary
             batch_speakers = None
+        # Determine category-level effort override if specified on the CategoryRule
+        category_rule = next((c for c in config.categories if c.name == batch.category), None)
+        category_effort = category_rule.effort if category_rule and category_rule.effort else None
+
         system_prompt = build_system_prompt_for_category(config, batch.category, batch_glossary, batch_speakers)
         user_payload = build_user_payload(batch)
         last_error = None
         for attempt in range(config.provider.max_retries):
             start = time.monotonic()
-            raw = await provider.complete(system_prompt, user_payload, max_tokens=config.provider.max_output_tokens)
+            raw = await _call_complete(
+                provider,
+                system_prompt,
+                user_payload,
+                max_tokens=config.provider.max_output_tokens,
+                effort=category_effort,
+            )
             latencies.append(time.monotonic() - start)
             parsed, error = parse_and_validate_response(raw)
             if parsed is not None:
@@ -233,10 +258,18 @@ async def _tier1_repair(
             else:
                 batch_glossary = glossary
                 batch_speakers = None
+            category_rule = next((c for c in config.categories if c.name == category_name), None)
+            category_effort = category_rule.effort if category_rule and category_rule.effort else None
             system_prompt = build_system_prompt_for_category(config, category_name, batch_glossary, batch_speakers)
             user_payload = build_retry_payload(entries, issues_by_key)
             try:
-                raw = await provider.complete(system_prompt, user_payload, max_tokens=config.provider.max_output_tokens)
+                raw = await _call_complete(
+                    provider,
+                    system_prompt,
+                    user_payload,
+                    max_tokens=config.provider.max_output_tokens,
+                    effort=category_effort,
+                )
             except Exception as e:
                 print(f"  [tier1] retry call failed for category '{category_name}': {e}")
                 return
@@ -275,6 +308,16 @@ async def _tier1_repair(
             e.extra["_tier1_retry_exhausted"] = True
 
     return per_entry, repaired_count
+
+
+def _snapshot_before_merge(path: Path, config: ProjectConfig):
+    """Save a pre-merge source snapshot for post-run integrity verification diffs."""
+    snapshot_dir = config.root / "tm" / "pre_merge_snapshots"
+    snapshot_dir.mkdir(parents=True, exist_ok=True)
+    snapshot_file = snapshot_dir / path.name
+    if not snapshot_file.exists() and path.exists():
+        import shutil
+        shutil.copy2(path, snapshot_file)
 
 
 def should_escalate_to_high(item: ReviewItem, config: ProjectConfig) -> tuple[bool, str]:
@@ -316,6 +359,7 @@ def _finalize_file(
     if escalation_provider is None:
         escalation_provider = review_provider
 
+    _snapshot_before_merge(path, config)
     merge_all(file_entries, adapter)
 
     format_kwargs = {}

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .config import load_project
 from .audit import run_audit, render_report_markdown
+from .adapters.registry import get_adapter
 from .pipeline import plan, run
 
 _INIT_TEMPLATE = """\
@@ -216,7 +217,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     provider = _build_provider(config, args.dry_run)
 
     review_model = config.provider.review_model or config.provider.model
-    review_effort = config.provider.review_effort or "low"
+    review_effort = config.provider.review_effort or "high"
     review_provider = _build_provider(
         config,
         args.dry_run,
@@ -242,6 +243,116 @@ def cmd_run(args: argparse.Namespace) -> int:
         max_api_calls=args.max_api_calls,
     )
     print(stats.summary())
+    return 0
+
+
+def cmd_verify(args: argparse.Namespace) -> int:
+    config = load_project(args.project)
+    adapter = get_adapter(config.format, config.format_options)
+
+    snapshot_dir = config.root / "tm" / "pre_merge_snapshots"
+    if not snapshot_dir.exists() or not any(snapshot_dir.iterdir()):
+        print("=== POST-RUN INTEGRITY VERIFICATION ===")
+        print(f"  Project: {config.project}")
+        print()
+        print("  [ERROR] No pre-merge snapshots found in 'tm/pre_merge_snapshots'.")
+        print("  Verification requires snapshots created before merge during 'locpipe run'.")
+        print("  Historical runs completed prior to snapshot support cannot be retroactively verified.")
+        print("=======================================")
+        return 1
+
+    import inspect
+    supports_sink = "audit_sink" in inspect.signature(adapter.extract).parameters
+
+    if not supports_sink:
+        print("=== POST-RUN INTEGRITY VERIFICATION ===")
+        print(f"  Project: {config.project}")
+        print(f"  Format '{config.format}' does not support extraction classification auditing.")
+        print("=======================================")
+        return 0
+
+    batch_files = config.batch_files
+    files_verified = 0
+    clean_untouched_count = 0
+    kept_changed_count = 0
+    kept_unchanged_count = 0
+    anomalies: list[dict[str, Any]] = []
+
+    for path in batch_files:
+        snapshot_file = snapshot_dir / path.name
+        if not snapshot_file.exists():
+            continue
+
+        snap_sink: list[tuple[str, str, str]] = []
+        try:
+            adapter.extract(snapshot_file, audit_sink=snap_sink)
+        except Exception as e:
+            anomalies.append({
+                "file": path.name,
+                "path": "<file-level>",
+                "action": "parse_error",
+                "expected": f"Valid snapshot {snapshot_file.name}",
+                "actual": f"Snapshot extraction error: {e}",
+            })
+            continue
+
+        curr_sink: list[tuple[str, str, str]] = []
+        try:
+            adapter.extract(path, audit_sink=curr_sink)
+        except Exception as e:
+            anomalies.append({
+                "file": path.name,
+                "path": "<file-level>",
+                "action": "parse_error",
+                "expected": f"Valid merged file {path.name}",
+                "actual": f"Current file extraction error: {e}",
+            })
+            continue
+
+        curr_values = {json_path: val for json_path, val, _ in curr_sink}
+        files_verified += 1
+
+        for json_path, orig_val, action in snap_sink:
+            curr_val = curr_values.get(json_path)
+
+            if action.startswith("noise:") or action == "excluded_by_config":
+                if curr_val != orig_val:
+                    anomalies.append({
+                        "file": path.name,
+                        "path": json_path,
+                        "action": action,
+                        "expected": orig_val,
+                        "actual": curr_val,
+                    })
+                else:
+                    clean_untouched_count += 1
+            elif action == "kept":
+                if curr_val != orig_val:
+                    kept_changed_count += 1
+                else:
+                    kept_unchanged_count += 1
+
+    print("=== POST-RUN INTEGRITY VERIFICATION ===")
+    print(f"  Project:                               {config.project}")
+    print(f"  Batch Files Verified:                  {files_verified}")
+    print(f"  Untouched Noise / Excluded Strings:    {clean_untouched_count} (100% verified clean)")
+    print(f"  Translated Kept Strings Modified:      {kept_changed_count}")
+    if kept_unchanged_count > 0:
+        print(f"  Kept Strings Unchanged:                {kept_unchanged_count}")
+    print(f"  Anomalies Found:                       {len(anomalies)}")
+
+    if anomalies:
+        print("\n--- ANOMALIES DETECTED ---")
+        for a in anomalies:
+            print(f"  • [{a['file']}] {a['path']}")
+            print(f"      Classification:   {a['action']}")
+            print(f"      Pre-merge Value:  {a['expected']!r}")
+            print(f"      Post-merge Value: {a['actual']!r}")
+        print("=======================================")
+        return 1
+
+    print("  Status: All noise and excluded paths remained perfectly untouched.")
+    print("=======================================")
     return 0
 
 
@@ -271,6 +382,13 @@ def main(argv: list[str] | None = None) -> int:
     p_audit.add_argument("--project", required=True, help="path to the project directory")
     p_audit.add_argument("--out", default=None, help="report path (default: <project>/audit_report.md)")
     p_audit.set_defaults(func=cmd_audit)
+
+    p_verify = sub.add_parser(
+        "verify",
+        help="post-run integrity verification: diffs merged batch files against pre-merge snapshots to prove noise/excluded paths were untouched",
+    )
+    p_verify.add_argument("--project", required=True, help="path to the project directory")
+    p_verify.set_defaults(func=cmd_verify)
 
     p_run = sub.add_parser("run", help="run the pipeline for a project")
     p_run.add_argument("--project", required=True, help="path to the project directory")

@@ -30,7 +30,14 @@ class TranslationProvider(ABC):
     persists_to_tm: bool = True
 
     @abstractmethod
-    async def complete(self, system_prompt: str, user_payload: str, *, max_tokens: int) -> str:
+    async def complete(
+        self,
+        system_prompt: str,
+        user_payload: str,
+        *,
+        max_tokens: int,
+        effort: Optional[str] = None,
+    ) -> str:
         """Send one request, return the raw text response. Retries,
         rate limiting, and schema validation happen one layer up in
         pipeline.py — this method's only job is "prompt in, text out."
