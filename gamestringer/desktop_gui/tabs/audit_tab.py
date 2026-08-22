@@ -51,6 +51,26 @@ class AuditTab(ttk.Frame):
         main_frame = ttk.Frame(self, style="TFrame", padding=12)
         main_frame.pack(fill=tk.BOTH, expand=True)
 
+        # Workflow Guide Card (Always visible)
+        explainer_frame = section_frame(main_frame, "📖 Extraction Audit Workflow", padding=8)
+        explainer_frame.pack(fill=tk.X, pady=(0, 8))
+
+        explainer_text = (
+            "• Purpose: Scans project batch files with ZERO LLM calls/cost to classify extracted strings.\n"
+            "• Classifications: [kept] translatable text sent to LLM | [noise:*] auto-filtered engine noise (GUIDs, types, colors) | [excluded_by_config] filtered by path rules.\n"
+            "• Recommended Order: Run this audit BEFORE translating. Filter by 'kept', check for unwanted engine strings, click 'Exclude Selected Path' to filter them out, then proceed to the Run tab."
+        )
+        lbl_explainer = tk.Label(
+            explainer_frame,
+            text=explainer_text,
+            font=FONT_BODY,
+            bg=BG_SURFACE,
+            fg=FG_TEXT,
+            justify=tk.LEFT,
+            anchor="w"
+        )
+        lbl_explainer.pack(fill=tk.X)
+
         # Top Control Bar
         top_bar = ttk.Frame(main_frame, style="Card.TFrame", padding=8)
         top_bar.pack(fill=tk.X, pady=(0, 10))

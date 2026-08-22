@@ -24,6 +24,9 @@ from gamestringer.desktop_gui.widgets import (
 )
 
 
+_DEFAULT_CHAR_FALLBACK = {"ő": "ô", "ű": "û", "Ő": "Ô", "Ű": "Û"}
+
+
 def get_default_projects_dir() -> Path:
     cwd = Path.cwd()
     candidates = [
@@ -331,22 +334,88 @@ class ProjectsTab(ttk.Frame):
                                 tooltip="Glob pattern matching input batch files relative to project root (e.g. batches/*.json)")
         r_bg.pack(side=tk.LEFT)
 
-        # Provider Lock Notice
-        r_prov = ttk.Frame(form, style="Card.TFrame")
-        r_prov.pack(fill=tk.X, pady=6)
-        lbl_prov = tk.Label(
-            r_prov,
-            text="🔒 LLM Provider: antigravity_cli (model: gemini-3.7-flash) — Fixed across all projects",
+        # Section: LLM Provider & Effort
+        sec_prov = section_frame(form, "LLM Provider & Effort", padding=10)
+        sec_prov.pack(fill=tk.X, pady=8)
+
+        # Fixed provider notice
+        lbl_prov_locked = tk.Label(
+            sec_prov,
+            text="🔒 Provider Engine: antigravity_cli (locked) — Uses local Google Antigravity CLI",
             font=FONT_MONO,
             bg=BG_INSET,
             fg=ACCENT_MOSS,
             padx=8,
             pady=4,
             relief="solid",
-            bd=1
+            bd=1,
+            anchor="w"
         )
-        lbl_prov.pack(fill=tk.X)
-        create_tooltip(lbl_prov, "The sole maintained LLM provider is Antigravity CLI, using Gemini 3.7 Flash.")
+        lbl_prov_locked.pack(fill=tk.X, pady=(0, 6))
+        create_tooltip(lbl_prov_locked, "The sole maintained LLM provider is Antigravity CLI.")
+
+        # Row: Translate Phase
+        r_t = ttk.Frame(sec_prov, style="Card.TFrame")
+        r_t.pack(fill=tk.X, pady=3)
+        self.var_prov_model = tk.StringVar(value="gemini-3.7-flash")
+        r_tm, _ = labeled_combo(
+            r_t, "Translate Model:", self.var_prov_model,
+            values=["gemini-3.7-flash", "gemini-3.1-pro"],
+            width=18, label_width=16, state="normal",
+            tooltip="Model used for initial batch translation pass (Phase 8). Accepts standard or custom typed model names."
+        )
+        r_tm.pack(side=tk.LEFT, padx=(0, 15))
+
+        self.var_prov_effort = tk.StringVar(value="low")
+        r_te, _ = labeled_combo(
+            r_t, "Translate Effort:", self.var_prov_effort,
+            values=["low", "high"],
+            width=8, label_width=15, state="readonly",
+            tooltip="Thinking effort level for translate pass (low / high)."
+        )
+        r_te.pack(side=tk.LEFT)
+
+        # Row: Review Phase
+        r_r = ttk.Frame(sec_prov, style="Card.TFrame")
+        r_r.pack(fill=tk.X, pady=3)
+        self.var_prov_review_model = tk.StringVar(value="gemini-3.7-flash")
+        r_rm, _ = labeled_combo(
+            r_r, "Review Model:", self.var_prov_review_model,
+            values=["gemini-3.7-flash", "gemini-3.1-pro"],
+            width=18, label_width=16, state="normal",
+            tooltip="Model used for Tier 1 review/repair of flagged items (Phase 13). Accepts standard or custom typed model names."
+        )
+        r_rm.pack(side=tk.LEFT, padx=(0, 15))
+
+        self.var_prov_review_effort = tk.StringVar(value="high")
+        r_re, _ = labeled_combo(
+            r_r, "Review Effort:", self.var_prov_review_effort,
+            values=["low", "high"],
+            width=8, label_width=15, state="readonly",
+            tooltip="Thinking effort level for review pass (low / high). Defaults to high for reasoning-heavy repairs."
+        )
+        r_re.pack(side=tk.LEFT)
+
+        # Row: Escalation Phase
+        r_e = ttk.Frame(sec_prov, style="Card.TFrame")
+        r_e.pack(fill=tk.X, pady=3)
+        self.var_prov_escalation_model = tk.StringVar(value="")
+        r_em, _ = labeled_combo(
+            r_e, "Escalation Model:", self.var_prov_escalation_model,
+            values=["", "gemini-3.7-flash", "gemini-3.1-pro"],
+            width=18, label_width=16, state="normal",
+            tooltip="Optional: Model for Tier 2 escalation when review fails. Leave blank to inherit Review Model."
+        )
+        r_em.pack(side=tk.LEFT, padx=(0, 15))
+
+        self.var_prov_escalation_effort = tk.StringVar(value="")
+        r_ee, _ = labeled_combo(
+            r_e, "Escalation Effort:", self.var_prov_escalation_effort,
+            values=["", "low", "high"],
+            width=8, label_width=15, state="readonly",
+            tooltip="Optional: Thinking effort level for Tier 2 escalation. Leave blank to inherit Review Effort."
+        )
+        r_ee.pack(side=tk.LEFT)
 
         # Section: Format Options
         sec_opt = section_frame(form, "Format Options", padding=10)
@@ -364,6 +433,21 @@ class ProjectsTab(ttk.Frame):
         # Character replacements
         r_cr = ttk.Frame(sec_opt, style="Card.TFrame")
         r_cr.pack(fill=tk.X, pady=4)
+
+        # Font fallback checkbox
+        self.var_char_fallback_toggle = tk.BooleanVar(value=False)
+        self.chk_char_fallback = ttk.Checkbutton(
+            r_cr,
+            text="Font doesn't support ő/ű → use ASCII-safe fallback (ő→ô, ű→û)",
+            variable=self.var_char_fallback_toggle,
+            command=self._on_char_fallback_toggled
+        )
+        self.chk_char_fallback.pack(anchor="w", pady=(0, 4))
+        create_tooltip(
+            self.chk_char_fallback,
+            "One-click shortcut: replaces ő/ű with ô/û and Ő/Ű with Ô/Û for games with incomplete Hungarian font support"
+        )
+
         lbl_cr = ttk.Label(r_cr, text="Character Replacements (JSON map, e.g. {\"ő\": \"ô\", \"ű\": \"û\"}):",
                            font=FONT_BODY, background=BG_SURFACE, foreground=FG_TEXT)
         lbl_cr.pack(anchor="w")
@@ -431,9 +515,31 @@ class ProjectsTab(ttk.Frame):
 
         self._bind_dirty_events()
 
+    def _on_char_fallback_toggled(self):
+        if self._suppress_dirty:
+            return
+        is_checked = self.var_char_fallback_toggle.get()
+        raw = self.var_char_replacements.get().strip()
+        if is_checked:
+            if not raw or raw == "{}":
+                self.var_char_replacements.set(json.dumps(_DEFAULT_CHAR_FALLBACK, ensure_ascii=False))
+        else:
+            try:
+                parsed = json.loads(raw) if raw else {}
+                if parsed == _DEFAULT_CHAR_FALLBACK:
+                    self.var_char_replacements.set("{}")
+            except Exception:
+                pass
+        self._on_field_changed()
+
     def _bind_dirty_events(self):
-        for var in [self.var_source_lang, self.var_target_lang, self.var_format,
-                    self.var_batch_glob, self.var_noise_filter, self.var_char_replacements]:
+        for var in [
+            self.var_source_lang, self.var_target_lang, self.var_format,
+            self.var_batch_glob, self.var_noise_filter, self.var_char_replacements,
+            self.var_prov_model, self.var_prov_effort,
+            self.var_prov_review_model, self.var_prov_review_effort,
+            self.var_prov_escalation_model, self.var_prov_escalation_effort
+        ]:
             var.trace_add("write", self._on_field_changed)
         self.txt_path_exclude.bind("<KeyRelease>", self._on_field_changed)
 
@@ -553,11 +659,21 @@ class ProjectsTab(ttk.Frame):
             self.var_format.set(self.raw_config.get("format", "uabea_json"))
             self.var_batch_glob.set((self.raw_config.get("batches") or {}).get("glob", "batches/*.json"))
 
+            # Load provider configuration
+            provider_cfg = self.raw_config.get("provider", {})
+            self.var_prov_model.set(provider_cfg.get("model", "gemini-3.7-flash"))
+            self.var_prov_effort.set(provider_cfg.get("effort", "low"))
+            self.var_prov_review_model.set(provider_cfg.get("review_model", "gemini-3.7-flash"))
+            self.var_prov_review_effort.set(provider_cfg.get("review_effort", "high"))
+            self.var_prov_escalation_model.set(provider_cfg.get("escalation_model", "") or "")
+            self.var_prov_escalation_effort.set(provider_cfg.get("escalation_effort", "") or "")
+
             format_opts = self.raw_config.get("format_options", {})
             self.var_noise_filter.set(format_opts.get("noise_filter", True))
 
             char_rep = format_opts.get("character_replacements", {})
             self.var_char_replacements.set(json.dumps(char_rep, ensure_ascii=False) if char_rep else "{}")
+            self.var_char_fallback_toggle.set(char_rep == _DEFAULT_CHAR_FALLBACK)
             self.lbl_json_error.config(text="")
             self.entry_char_replacements.configure(style="TEntry")
 
@@ -769,12 +885,26 @@ class ProjectsTab(ttk.Frame):
             cfg["batches"] = {}
         cfg["batches"]["glob"] = self.var_batch_glob.get()
 
-        # Always lock provider to antigravity_cli
+        # Provider configuration
         if "provider" not in cfg:
             cfg["provider"] = {}
         cfg["provider"]["name"] = "antigravity_cli"
-        if "model" not in cfg["provider"]:
-            cfg["provider"]["model"] = "gemini-3.7-flash"
+        cfg["provider"]["model"] = self.var_prov_model.get().strip() or "gemini-3.7-flash"
+        cfg["provider"]["effort"] = self.var_prov_effort.get().strip() or "low"
+        cfg["provider"]["review_model"] = self.var_prov_review_model.get().strip() or "gemini-3.7-flash"
+        cfg["provider"]["review_effort"] = self.var_prov_review_effort.get().strip() or "high"
+
+        esc_model = self.var_prov_escalation_model.get().strip()
+        if esc_model:
+            cfg["provider"]["escalation_model"] = esc_model
+        else:
+            cfg["provider"].pop("escalation_model", None)
+
+        esc_effort = self.var_prov_escalation_effort.get().strip()
+        if esc_effort:
+            cfg["provider"]["escalation_effort"] = esc_effort
+        else:
+            cfg["provider"].pop("escalation_effort", None)
 
         # Format options
         if "format_options" not in cfg:

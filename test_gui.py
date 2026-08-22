@@ -10,6 +10,7 @@ import shutil
 import tempfile
 from pathlib import Path
 import tkinter as tk
+from tkinter import ttk
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -229,3 +230,107 @@ def test_settings_persistence(tk_root, tmp_path):
         saved = json.loads(test_settings.read_text(encoding="utf-8"))
         assert saved["last_project"] == "saved_project_xyz"
         assert saved["last_tab"] == 2
+
+
+def test_projects_tab_font_fallback_checkbox(tk_root, tmp_path):
+    p1 = tmp_path / "locpipe" / "projects" / "proj_fb_test"
+    p1.mkdir(parents=True)
+    (p1 / "project.yaml").write_text("project: proj_fb_test\nsource_lang: en\ntarget_lang: hu\nformat: uabea_json\n", encoding="utf-8")
+
+    with patch("gamestringer.desktop_gui.tabs.projects_tab.get_default_projects_dir", return_value=tmp_path / "locpipe" / "projects"):
+        tab = ProjectsTab(tk.Frame(tk_root), tk_root)
+        tab.select_project("proj_fb_test")
+
+        # Initially empty/unchecked
+        assert tab.var_char_replacements.get() == "{}"
+        assert tab.var_char_fallback_toggle.get() is False
+
+        # Check box -> fills default 4-key mapping
+        tab.var_char_fallback_toggle.set(True)
+        tab._on_char_fallback_toggled()
+        parsed = json.loads(tab.var_char_replacements.get())
+        assert parsed == {"ő": "ô", "ű": "û", "Ő": "Ô", "Ű": "Û"}
+
+        # Uncheck box -> resets back to {}
+        tab.var_char_fallback_toggle.set(False)
+        tab._on_char_fallback_toggled()
+        assert tab.var_char_replacements.get() == "{}"
+
+        # Custom mapping -> checking does not overwrite
+        custom = json.dumps({"ő": "o", "a": "b"}, ensure_ascii=False)
+        tab.var_char_replacements.set(custom)
+        tab.var_char_fallback_toggle.set(True)
+        tab._on_char_fallback_toggled()
+        assert tab.var_char_replacements.get() == custom
+
+
+def test_projects_tab_provider_model_effort_config(tk_root, tmp_path):
+    p1 = tmp_path / "locpipe" / "projects" / "proj_prov_test"
+    p1.mkdir(parents=True)
+    initial_yaml = (
+        "project: proj_prov_test\n"
+        "source_lang: en\n"
+        "target_lang: hu\n"
+        "format: uabea_json\n"
+        "provider:\n"
+        "  name: antigravity_cli\n"
+        "  model: gemini-3.7-flash\n"
+        "  effort: low\n"
+        "  review_model: gemini-3.1-pro\n"
+        "  review_effort: high\n"
+    )
+    (p1 / "project.yaml").write_text(initial_yaml, encoding="utf-8")
+
+    with patch("gamestringer.desktop_gui.tabs.projects_tab.get_default_projects_dir", return_value=tmp_path / "locpipe" / "projects"):
+        tab = ProjectsTab(tk.Frame(tk_root), tk_root)
+        tab.select_project("proj_prov_test")
+
+        # Verify loaded values
+        assert tab.var_prov_model.get() == "gemini-3.7-flash"
+        assert tab.var_prov_effort.get() == "low"
+        assert tab.var_prov_review_model.get() == "gemini-3.1-pro"
+        assert tab.var_prov_review_effort.get() == "high"
+        assert tab.var_prov_escalation_model.get() == ""
+        assert tab.var_prov_escalation_effort.get() == ""
+
+        # Set escalation fields and save
+        tab.var_prov_escalation_model.set("gemini-3.1-pro")
+        tab.var_prov_escalation_effort.set("high")
+        res = tab.save_project()
+        assert res is True
+
+        saved_data = yaml.safe_load((p1 / "project.yaml").read_text(encoding="utf-8"))
+        assert saved_data["provider"]["escalation_model"] == "gemini-3.1-pro"
+        assert saved_data["provider"]["escalation_effort"] == "high"
+
+        # Clear escalation fields and save -> keys should be omitted
+        tab.var_prov_escalation_model.set("")
+        tab.var_prov_escalation_effort.set("")
+        res = tab.save_project()
+        assert res is True
+
+        saved_data2 = yaml.safe_load((p1 / "project.yaml").read_text(encoding="utf-8"))
+        assert "escalation_model" not in saved_data2["provider"]
+        assert "escalation_effort" not in saved_data2["provider"]
+
+
+def test_audit_tab_explainer_rendered(tk_root, tmp_path):
+    p1 = tmp_path / "locpipe" / "projects" / "proj_audit_test"
+    p1.mkdir(parents=True)
+    (p1 / "project.yaml").write_text("project: proj_audit_test\nsource_lang: en\ntarget_lang: hu\nformat: uabea_json\n", encoding="utf-8")
+
+    with patch("gamestringer.desktop_gui.tabs.audit_tab.get_default_projects_dir", return_value=tmp_path / "locpipe" / "projects"):
+        tab = AuditTab(tk.Frame(tk_root), tk_root)
+        
+        def collect_texts(widget):
+            texts = []
+            if isinstance(widget, (tk.Label, ttk.Label)):
+                texts.append(widget.cget("text"))
+            for child in widget.winfo_children():
+                texts.extend(collect_texts(child))
+            return texts
+
+        combined = " ".join(collect_texts(tab))
+        assert "Scans project batch files with ZERO LLM calls/cost" in combined
+        assert "[kept]" in combined
+        assert "[noise:*]" in combined
