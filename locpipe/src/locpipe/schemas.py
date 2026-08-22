@@ -35,7 +35,7 @@ from .character_voices import load_character_voice_rows, prune_character_voices_
 from .config import ProjectConfig
 from .glossary import GlossaryTerm, format_for_prompt
 from .models import Entry
-from .prompt_builder import fill, load_template, toggle_section
+from .prompt_builder import fill, load_template, toggle_section, get_register_instruction
 
 RESPONSE_SCHEMA = {
     "type": "array",
@@ -103,6 +103,7 @@ def build_system_prompt_for_category(
         template,
         source_lang=config.source_lang,
         target_lang=config.target_lang,
+        register_instruction=get_register_instruction(getattr(config, "target_register", "informal")),
         category=category_name,
         glossary=format_for_prompt(glossary),
         style_guide=_read(config.resources.get("lang_style")),

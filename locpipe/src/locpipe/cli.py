@@ -13,6 +13,7 @@ _INIT_TEMPLATE = """\
 project: {name}
 source_lang: en
 target_lang: hu
+target_register: informal   # informal (tegez — default) | formal (magáz)
 
 format: generic_kv   # ported: generic_kv, po_gettext, ue4_5_po (Unreal Localization
                      # Dashboard .po export), unity (official Localization Package CSV
@@ -160,11 +161,16 @@ def cmd_plan(args: argparse.Namespace) -> int:
         print(f"    - {cat}: {n} call(s)")
     print()
     print("Token Estimates (Heuristic char/4 calculation):")
-    print(f"  Estimated Input Tokens:        ~{result['estimated_uncached_input_tokens']:,}")
-    print(f"  Estimated System Prompt Tokens: ~{result['estimated_cache_read_tokens']:,} (reused across {result['llm_calls_needed']} calls)")
-    print(f"  Estimated Target Output Tokens: ~{result['estimated_output_tokens']:,}")
+    print(f"  Estimated Input Tokens (caching-optimistic): ~{result['estimated_uncached_input_tokens']:,}")
+    print(f"  Estimated System Prompt Tokens (cached):    ~{result['estimated_cache_read_tokens']:,} (reused across {result['llm_calls_needed']} calls)")
+    if "estimated_realistic_input_tokens" in result:
+        print(f"  Estimated Realistic Input Tokens (no-cache): ~{result['estimated_realistic_input_tokens']:,}")
+    print(f"  Estimated Target Output Tokens:              ~{result['estimated_output_tokens']:,}")
     print()
-    print("Note: Gemini models (including Gemini 3.6 Flash) automatically cache long context prompts.")
+    if result.get("caching_note"):
+        print(f"Note: {result['caching_note']}")
+    else:
+        print("Note: Gemini models automatically cache long context prompts.")
     print("Check current per-token pricing at ai.google.dev/pricing before sizing your billing expectations.")
     print("=======================================")
     return 0

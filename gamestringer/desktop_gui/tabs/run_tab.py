@@ -249,7 +249,7 @@ class RunTab(ttk.Frame):
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _on_plan_complete(self, config, res, error: Optional[str]):
+    def _on_plan_complete(self, config, res: Optional[dict], error: Optional[str]):
         self.btn_plan.config(state="normal")
         self.pbar.stop()
         self.pbar.pack_forget()
@@ -259,18 +259,40 @@ class RunTab(ttk.Frame):
             self.lbl_stats.config(text=f"Plan failed: {error}", fg=ACCENT_PAPRIKA)
             return
 
+        if not res:
+            self._log("\n[ERROR] Plan returned empty result.\n", "red")
+            self.lbl_stats.config(text="Plan returned empty result.", fg=ACCENT_PAPRIKA)
+            return
+
+        total = res.get("total_entries", 0)
+        unique = res.get("unique_strings_needing_translation", 0)
+        already_trans = res.get("already_translated", 0)
+        tm_hits = res.get("tm_hits", 0)
+        batches = res.get("llm_calls_needed", 0)
+        output_tokens = res.get("estimated_output_tokens", 0)
+        uncached_input = res.get("estimated_uncached_input_tokens", 0)
+        cached_read = res.get("estimated_cache_read_tokens", 0)
+        realistic_input = res.get("estimated_realistic_input_tokens", uncached_input + cached_read)
+        caching_note = res.get("caching_note", "")
+
+        dedup_pct = ((total - unique) / total * 100) if total > 0 else 0.0
+
         self.has_run_plan_in_session = True
         self._log(f"\n=== PRE-FLIGHT PLAN: {config.project} ===\n", "cyan")
         self._log(f"Provider: {config.provider.name} ({config.provider.model})\n", "muted")
-        self._log(f"Raw translatable entries:  {res.raw_entries_count:,}\n")
-        self._log(f"Unique strings:            {res.unique_entries_count:,} ({res.dedupe_ratio:.1f}% deduplication)\n")
-        self._log(f"Total Batches:             {res.batch_count}\n")
-        self._log(f"Estimated Input Tokens:    ~{res.estimated_input_tokens:,}\n")
-        self._log(f"Estimated Output Tokens:   ~{res.estimated_output_tokens:,}\n", "green")
+        self._log(f"Raw translatable entries:  {total:,}\n")
+        self._log(f"Already translated:        {already_trans:,}\n")
+        self._log(f"Filled from TM (0 cost):   {tm_hits:,}\n")
+        self._log(f"Unique strings:            {unique:,} ({dedup_pct:.1f}% deduplication)\n")
+        self._log(f"Total Batches:             {batches}\n")
+        self._log(f"Estimated Total Input Tokens (no caching — Antigravity CLI): ~{realistic_input:,}\n")
+        self._log(f"Estimated Target Output Tokens: ~{output_tokens:,}\n", "green")
+        if caching_note:
+            self._log(f"Note: {caching_note}\n", "muted")
 
         stat_text = (
-            f"Project: {config.project} | Batches: {res.batch_count} | Unique Entries: {res.unique_entries_count:,}\n"
-            f"Estimated Tokens: ~{res.estimated_input_tokens:,} in / ~{res.estimated_output_tokens:,} out (0 API cost for plan)"
+            f"Project: {config.project} | Batches: {batches} | Unique Strings: {unique:,} (dedup: {dedup_pct:.1f}%)\n"
+            f"Estimated Tokens (no caching): ~{realistic_input:,} in / ~{output_tokens:,} out (0 API cost for plan)"
         )
         self.lbl_stats.config(text=stat_text, fg=ACCENT_INK)
 

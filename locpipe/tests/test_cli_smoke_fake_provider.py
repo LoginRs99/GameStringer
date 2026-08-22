@@ -162,3 +162,18 @@ def test_cli_dry_run_never_writes_to_the_tm(tmp_path: Path) -> None:
         "a later real run's TM lookup would silently reuse this placeholder text as if it "
         "were a genuine translation"
     )
+
+
+def test_cli_init_contains_target_register(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    exit_code = main(["init", "new_game"])
+    assert exit_code == 0
+
+    cfg_path = tmp_path / "projects" / "new_game" / "project.yaml"
+    assert cfg_path.exists()
+    content = cfg_path.read_text(encoding="utf-8")
+    assert "target_register: informal" in content
+
+    cfg = load_project(tmp_path / "projects" / "new_game")
+    assert cfg.target_register == "informal"
+

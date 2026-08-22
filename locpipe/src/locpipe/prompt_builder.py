@@ -37,6 +37,23 @@ def fill(template: str, **values: str) -> str:
     return template
 
 
+def get_register_instruction(target_register: str = "informal") -> str:
+    """Return explicit instruction for Hungarian formality register (tegez/magáz),
+    noting that character voice bibles override the project default for specific characters.
+    """
+    if str(target_register).lower() == "formal":
+        return (
+            "Address the player formally throughout (magázódás — use 'Ön'/'Maga' forms, not 'te'), "
+            "consistently across all UI, narration, and dialogue, UNLESS a specific character's voice "
+            "entry in the character bible explicitly overrides this for their own lines."
+        )
+    return (
+        "Address the player informally throughout (tegeződés — use 'te' forms, not 'Ön'), "
+        "consistently across all UI, narration, and dialogue, UNLESS a specific character's voice "
+        "entry in the character bible explicitly overrides this for their own lines."
+    )
+
+
 def toggle_section(template: str, start_marker: str, end_marker: str, *, keep: bool) -> str:
     """A %%SECTION_START%% ... %%SECTION_END%% block: keep=True unwraps
     it (removes just the marker lines, leaves the content), keep=False

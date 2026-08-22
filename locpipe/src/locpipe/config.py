@@ -165,6 +165,7 @@ class ProjectConfig:
     categories: list[CategoryRule]
     provider: ProviderConfig
     tm_db_path: Path
+    target_register: str = "informal"
     review_threshold: float = 0.75
     max_expansion_ratio: float = 1.6
     tier1_repair_attempts: int = 1
@@ -296,10 +297,18 @@ def load_project(project_dir: str | Path) -> ProjectConfig:
     tm_db_path = _resolve(root, tm_raw.get("db_path", "tm/translation_memory.sqlite3"))
     confidence_raw = raw.get("confidence") or {}
 
+    target_register = raw.get("target_register", "informal")
+    if target_register not in ("informal", "formal"):
+        raise ValueError(
+            f"Invalid target_register '{target_register}' in project.yaml. "
+            "Only 'informal' or 'formal' are supported."
+        )
+
     return ProjectConfig(
         project=raw["project"],
         source_lang=raw["source_lang"],
         target_lang=raw["target_lang"],
+        target_register=target_register,
         format=raw["format"],
         root=root,
         batch_glob=(raw.get("batches") or {}).get("glob", "batches/*.json"),

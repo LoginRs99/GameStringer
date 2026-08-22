@@ -13,7 +13,7 @@ import asyncio
 import json
 
 from .glossary import GlossaryTerm, format_for_prompt
-from .prompt_builder import fill, load_template
+from .prompt_builder import fill, load_template, get_register_instruction
 from .providers.base import TranslationProvider
 from .review_queue import ReviewItem
 
@@ -42,12 +42,18 @@ async def review_batch(
     provider: TranslationProvider,
     source_lang: str,
     target_lang: str,
+    target_register: str = "informal",
     chunk_size: int = 20,
     max_output_tokens: int = 16384,
 ) -> list[dict]:
     if not items:
         return []
-    system_prompt = fill(load_template("review.md"), source_lang=source_lang, target_lang=target_lang)
+    system_prompt = fill(
+        load_template("review.md"),
+        source_lang=source_lang,
+        target_lang=target_lang,
+        register_instruction=get_register_instruction(target_register),
+    )
 
     async def _review_chunk(chunk: list[ReviewItem]) -> list[dict]:
         user_payload = build_review_payload(chunk, glossary)

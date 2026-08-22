@@ -315,22 +315,31 @@ class ProjectsTab(ttk.Frame):
         )
         r_fmt.pack(side=tk.LEFT)
 
-        # Row 2: Languages & Batch Glob
+        # Row 2: Languages, Formality Register & Batch Glob
         r2 = ttk.Frame(form, style="Card.TFrame")
         r2.pack(fill=tk.X, pady=4)
 
         self.var_source_lang = tk.StringVar(value="en")
-        r_sl, _ = labeled_entry(r2, "Source Lang:", self.var_source_lang, width=8, label_width=15,
+        r_sl, _ = labeled_entry(r2, "Source Lang:", self.var_source_lang, width=6, label_width=15,
                                 tooltip="Source language code (e.g. en)")
-        r_sl.pack(side=tk.LEFT, padx=(0, 15))
+        r_sl.pack(side=tk.LEFT, padx=(0, 10))
 
         self.var_target_lang = tk.StringVar(value="hu")
-        r_tl, _ = labeled_entry(r2, "Target Lang:", self.var_target_lang, width=8, label_width=12,
+        r_tl, _ = labeled_entry(r2, "Target Lang:", self.var_target_lang, width=6, label_width=11,
                                 tooltip="Target language code (e.g. hu)")
-        r_tl.pack(side=tk.LEFT, padx=(0, 15))
+        r_tl.pack(side=tk.LEFT, padx=(0, 10))
+
+        self.var_target_register = tk.StringVar(value="informal")
+        r_tr, _ = labeled_combo(
+            r2, "Register:", self.var_target_register,
+            values=["informal", "formal"],
+            width=10, label_width=9, state="readonly",
+            tooltip="Project-wide address register for narration/UI/dialogue (informal = tegeződés, formal = magázódás). Individual character voices can override this."
+        )
+        r_tr.pack(side=tk.LEFT, padx=(0, 10))
 
         self.var_batch_glob = tk.StringVar(value="batches/*.json")
-        r_bg, _ = labeled_entry(r2, "Batch Glob:", self.var_batch_glob, width=22, label_width=12,
+        r_bg, _ = labeled_entry(r2, "Batch Glob:", self.var_batch_glob, width=18, label_width=11,
                                 tooltip="Glob pattern matching input batch files relative to project root (e.g. batches/*.json)")
         r_bg.pack(side=tk.LEFT)
 
@@ -534,7 +543,7 @@ class ProjectsTab(ttk.Frame):
 
     def _bind_dirty_events(self):
         for var in [
-            self.var_source_lang, self.var_target_lang, self.var_format,
+            self.var_source_lang, self.var_target_lang, self.var_target_register, self.var_format,
             self.var_batch_glob, self.var_noise_filter, self.var_char_replacements,
             self.var_prov_model, self.var_prov_effort,
             self.var_prov_review_model, self.var_prov_review_effort,
@@ -656,6 +665,7 @@ class ProjectsTab(ttk.Frame):
             self.var_name.set(self.raw_config.get("project", name))
             self.var_source_lang.set(self.raw_config.get("source_lang", "en"))
             self.var_target_lang.set(self.raw_config.get("target_lang", "hu"))
+            self.var_target_register.set(self.raw_config.get("target_register", "informal"))
             self.var_format.set(self.raw_config.get("format", "uabea_json"))
             self.var_batch_glob.set((self.raw_config.get("batches") or {}).get("glob", "batches/*.json"))
 
@@ -735,6 +745,7 @@ class ProjectsTab(ttk.Frame):
             "project": name,
             "source_lang": "en",
             "target_lang": "hu",
+            "target_register": "informal",
             "format": "uabea_json",
             "batches": {"glob": "batches/*.json"},
             "resources": {
@@ -879,6 +890,7 @@ class ProjectsTab(ttk.Frame):
         cfg["project"] = self.var_name.get()
         cfg["source_lang"] = self.var_source_lang.get()
         cfg["target_lang"] = self.var_target_lang.get()
+        cfg["target_register"] = self.var_target_register.get().strip() or "informal"
         cfg["format"] = self.var_format.get()
 
         if "batches" not in cfg:

@@ -39,6 +39,9 @@ If the source text contains gender markers like {ms|...}{fs|...}:
 - Always preserve valid tag syntax ({ms|...}{fs|...}). Never output invalid or misspelled tag names (e.g. {mf|...}).
 - When a placeholder/tag sits adjacent to where a Hungarian case suffix or linking vowel would attach (e.g. {item}t, {item}ban), prefer rephrasing to avoid needing a suffix directly on the unknown placeholder rather than guessing a vowel-harmony-dependent ending.
 
+--- REGISTER & FORMALITY ---
+%%REGISTER_INSTRUCTION%%
+
 --- LENGTH RULES ---
 Keep the translation close in length to the source. Prefer the shorter of
 two equally accurate phrasings — do not add explanatory clauses, hedge

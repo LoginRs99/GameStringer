@@ -334,3 +334,75 @@ def test_audit_tab_explainer_rendered(tk_root, tmp_path):
         assert "Scans project batch files with ZERO LLM calls/cost" in combined
         assert "[kept]" in combined
         assert "[noise:*]" in combined
+
+
+def test_run_tab_plan_completion_with_dict(tk_root, tmp_path):
+    from gamestringer.desktop_gui.tabs.run_tab import RunTab
+    from locpipe.config import ProjectConfig, ProviderConfig
+
+    p1 = tmp_path / "locpipe" / "projects" / "proj_plan_test"
+    p1.mkdir(parents=True)
+    (p1 / "project.yaml").write_text("project: proj_plan_test\nsource_lang: en\ntarget_lang: hu\nformat: uabea_json\n", encoding="utf-8")
+
+    with patch("gamestringer.desktop_gui.tabs.run_tab.get_default_projects_dir", return_value=tmp_path / "locpipe" / "projects"):
+        tab = RunTab(tk.Frame(tk_root), tk_root)
+        tab.select_project("proj_plan_test")
+
+        config = ProjectConfig(
+            project="proj_plan_test",
+            source_lang="en",
+            target_lang="hu",
+            format="uabea_json",
+            root=p1,
+            batch_glob="batches/*.json",
+            resources={},
+            categories=[],
+            provider=ProviderConfig(),
+            tm_db_path=p1 / "tm.sqlite3",
+        )
+
+        plan_dict = {
+            "total_entries": 100,
+            "already_translated": 10,
+            "tm_hits": 20,
+            "unique_strings_needing_translation": 50,
+            "llm_calls_needed": 3,
+            "calls_by_category": {"dialogue": 2, "ui": 1},
+            "estimated_uncached_input_tokens": 1200,
+            "estimated_cache_read_tokens": 800,
+            "estimated_output_tokens": 600,
+            "estimated_realistic_input_tokens": 2600,
+            "caching_note": "Antigravity CLI note test",
+            "pending_files_count": 2,
+        }
+
+        # Invoking _on_plan_complete with a dict must NOT raise AttributeError
+        tab._on_plan_complete(config, plan_dict, None)
+
+        log_content = tab.txt_log.get("1.0", tk.END)
+        assert "Raw translatable entries:  100" in log_content
+        assert "Unique strings:            50 (50.0% deduplication)" in log_content
+        assert "Total Batches:             3" in log_content
+        assert "Estimated Total Input Tokens (no caching — Antigravity CLI): ~2,600" in log_content
+        assert "Antigravity CLI note test" in log_content
+        assert tab.has_run_plan_in_session is True
+
+
+def test_projects_tab_target_register(tk_root, tmp_path):
+    p1 = tmp_path / "locpipe" / "projects" / "proj_reg_test"
+    p1.mkdir(parents=True)
+    (p1 / "project.yaml").write_text("project: proj_reg_test\nsource_lang: en\ntarget_lang: hu\ntarget_register: formal\nformat: uabea_json\n", encoding="utf-8")
+
+    with patch("gamestringer.desktop_gui.tabs.projects_tab.get_default_projects_dir", return_value=tmp_path / "locpipe" / "projects"):
+        tab = ProjectsTab(tk.Frame(tk_root), tk_root)
+        tab.select_project("proj_reg_test")
+
+        assert tab.var_target_register.get() == "formal"
+
+        # Change to informal and save
+        tab.var_target_register.set("informal")
+        assert tab.save_project() is True
+
+        saved_data = yaml.safe_load((p1 / "project.yaml").read_text(encoding="utf-8"))
+        assert saved_data["target_register"] == "informal"
+

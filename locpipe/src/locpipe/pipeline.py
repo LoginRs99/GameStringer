@@ -469,7 +469,16 @@ def _finalize_file(
         if low_items:
             low_qa_calls += len(low_items)
             low_repairs = asyncio.run(
-                review_batch(low_items, glossary, review_provider, config.source_lang, config.target_lang, chunk_size=config.review_chunk_size, max_output_tokens=config.provider.max_output_tokens)
+                review_batch(
+                    low_items,
+                    glossary,
+                    review_provider,
+                    config.source_lang,
+                    config.target_lang,
+                    target_register=config.target_register,
+                    chunk_size=config.review_chunk_size,
+                    max_output_tokens=config.provider.max_output_tokens,
+                )
             )
             repairs_by_key = {r["key"]: r for r in low_repairs}
             for item in low_items:
@@ -497,7 +506,16 @@ def _finalize_file(
             high_review_items = [item for item, _ in high_items]
             high_qa_calls += len(high_review_items)
             high_repairs = asyncio.run(
-                review_batch(high_review_items, glossary, escalation_provider, config.source_lang, config.target_lang, chunk_size=config.review_chunk_size, max_output_tokens=config.provider.max_output_tokens)
+                review_batch(
+                    high_review_items,
+                    glossary,
+                    escalation_provider,
+                    config.source_lang,
+                    config.target_lang,
+                    target_register=config.target_register,
+                    chunk_size=config.review_chunk_size,
+                    max_output_tokens=config.provider.max_output_tokens,
+                )
             )
             repairs_by_key = {r["key"]: r for r in high_repairs}
             for item, reason in high_items:
@@ -1078,6 +1096,9 @@ def plan(config: ProjectConfig, *, limit_batches: int | None = None) -> dict:
     unique_source_tokens = sum(source_tokens_by_category.values())
     estimated_output_tokens = int(unique_source_tokens * 1.3)
 
+    estimated_realistic_input_tokens = uncached_prompt_tokens + cached_read_tokens + unique_source_tokens
+    caching_note = "Antigravity CLI runs as isolated subprocesses without persistent prompt-caching, so each batch pays full system prompt tokens."
+
     return {
         "total_entries": total_entries,
         "already_translated": already_translated_count,
@@ -1088,5 +1109,7 @@ def plan(config: ProjectConfig, *, limit_batches: int | None = None) -> dict:
         "estimated_uncached_input_tokens": uncached_prompt_tokens + unique_source_tokens,
         "estimated_cache_read_tokens": cached_read_tokens,
         "estimated_output_tokens": estimated_output_tokens,
+        "estimated_realistic_input_tokens": estimated_realistic_input_tokens,
+        "caching_note": caching_note,
         "pending_files_count": len(pending_files),
     }

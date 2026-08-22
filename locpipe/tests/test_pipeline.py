@@ -30,6 +30,7 @@ from locpipe.models import EntryStatus
 from locpipe.pipeline import plan, run
 from locpipe.providers.base import TranslationProvider
 from locpipe.providers.mock import MockProvider
+from locpipe.schemas import build_system_prompt_for_category
 
 FIXTURE = Path(__file__).parent / "fixtures" / "demo_project"
 
@@ -986,6 +987,86 @@ def test_partial_response_triggers_retry_not_silent_partial_success() -> None:
         print("PASS  test_partial_response_triggers_retry_not_silent_partial_success")
     finally:
         shutil.rmtree(project_dir.parent, ignore_errors=True)
+
+
+def test_plan_includes_realistic_tokens_and_caching_note() -> None:
+    project_dir = _fresh_copy()
+    try:
+        config = load_project(project_dir)
+        res = plan(config)
+        assert "total_entries" in res
+        assert "estimated_uncached_input_tokens" in res
+        assert "estimated_cache_read_tokens" in res
+        assert "estimated_realistic_input_tokens" in res
+        assert "caching_note" in res
+        assert res["estimated_realistic_input_tokens"] >= res["estimated_uncached_input_tokens"]
+        assert "Antigravity CLI" in res["caching_note"]
+    finally:
+        shutil.rmtree(project_dir.parent, ignore_errors=True)
+
+
+def test_register_setting_and_prompt_instructions() -> None:
+    project_dir = _fresh_copy()
+    try:
+        # Default is informal
+        config = load_project(project_dir)
+        assert config.target_register == "informal"
+
+        prompt_informal = build_system_prompt_for_category(config, "dialogue", [])
+        assert "tegeződés" in prompt_informal
+        assert "character bible explicitly overrides" in prompt_informal
+
+        # Switch to formal
+        (project_dir / "project.yaml").write_text(
+            (project_dir / "project.yaml").read_text(encoding="utf-8") + "\ntarget_register: formal\n",
+            encoding="utf-8"
+        )
+        config_formal = load_project(project_dir)
+        assert config_formal.target_register == "formal"
+
+        prompt_formal = build_system_prompt_for_category(config_formal, "dialogue", [])
+        assert "magázódás" in prompt_formal
+        assert "character bible explicitly overrides" in prompt_formal
+
+        # Invalid register
+        (project_dir / "project.yaml").write_text(
+            (project_dir / "project.yaml").read_text(encoding="utf-8").replace("target_register: formal", "target_register: pirate"),
+            encoding="utf-8"
+        )
+        try:
+            load_project(project_dir)
+            assert False, "Should have raised ValueError on invalid register"
+        except ValueError as e:
+            assert "Invalid target_register 'pirate'" in str(e)
+    finally:
+        shutil.rmtree(project_dir.parent, ignore_errors=True)
+
+
+def test_review_batch_register_instruction() -> None:
+    import asyncio
+    from locpipe.reviewer import review_batch
+    from locpipe.review_queue import ReviewItem
+    from locpipe.models import Entry, ValidationResult
+
+    class CapturePromptProvider:
+        def __init__(self):
+            self.last_system_prompt = ""
+
+        async def complete(self, system_prompt: str, user_payload: str, *, max_tokens: int = 16384) -> str:
+            self.last_system_prompt = system_prompt
+            return "[]"
+
+    provider = CapturePromptProvider()
+    entry = Entry(key="k1", file="test.json", source="Hello", target="Szia", category="dialogue")
+    item = ReviewItem(entry=entry, validation=ValidationResult(entry_key="k1"), confidence=0.5, confidence_flags=[])
+
+    asyncio.run(review_batch([item], [], provider, "en", "hu", target_register="informal"))
+    assert "tegeződés" in provider.last_system_prompt
+    assert "character bible explicitly overrides" in provider.last_system_prompt
+
+    asyncio.run(review_batch([item], [], provider, "en", "hu", target_register="formal"))
+    assert "magázódás" in provider.last_system_prompt
+    assert "character bible explicitly overrides" in provider.last_system_prompt
 
 
 if __name__ == "__main__":
