@@ -406,3 +406,46 @@ def test_projects_tab_target_register(tk_root, tmp_path):
         saved_data = yaml.safe_load((p1 / "project.yaml").read_text(encoding="utf-8"))
         assert saved_data["target_register"] == "informal"
 
+
+def test_audit_tab_force_retranslate(tk_root, tmp_path):
+    from gamestringer.desktop_gui.tabs.audit_tab import AuditTab
+    from locpipe.tm import TranslationMemory
+    from locpipe.models import TMRecord
+    from locpipe.normalize import content_hash, normalize_source
+
+    p1 = tmp_path / "locpipe" / "projects" / "proj_audit_force_test"
+    p1.mkdir(parents=True)
+    (p1 / "project.yaml").write_text("project: proj_audit_force_test\nsource_lang: en\ntarget_lang: hu\nformat: uabea_json\n", encoding="utf-8")
+
+    # Add a TM entry
+    tm = TranslationMemory(p1 / "tm" / "translation_memory.sqlite3")
+    src = "New Game Options"
+    h = content_hash(normalize_source(src))
+    rec = TMRecord(f"k_{h}", src, "Uj jatek beallitasok", "en", "hu", "ui", None, 1.0, "mt")
+    tm.upsert(h, rec)
+    assert tm.get(f"k_{h}") is not None
+    tm.close()
+
+    with patch("gamestringer.desktop_gui.tabs.audit_tab.get_default_projects_dir", return_value=tmp_path / "locpipe" / "projects"):
+        tab = AuditTab(tk.Frame(tk_root), tk_root)
+        tab.select_project("proj_audit_force_test")
+
+        # Mock audit record and tree row
+        tab.audit_records = [{"file": "file1", "path": "path.to.text", "action": "kept", "value": src}]
+        tab._render_records()
+
+        # Select the row in the treeview
+        children = tab.tree.get_children()
+        assert len(children) == 1
+        tab.tree.selection_set(children[0])
+
+        with patch("tkinter.messagebox.askyesno", return_value=True), \
+             patch("tkinter.messagebox.showinfo"):
+            tab.force_retranslate_selected()
+
+        # TM entry should now be deleted/invalidated
+        tm2 = TranslationMemory(p1 / "tm" / "translation_memory.sqlite3")
+        assert tm2.get(f"k_{h}") is None
+        tm2.close()
+
+

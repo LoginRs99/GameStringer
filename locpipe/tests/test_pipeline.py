@@ -1069,6 +1069,91 @@ def test_review_batch_register_instruction() -> None:
     assert "character bible explicitly overrides" in provider.last_system_prompt
 
 
+def test_full_bilingual_and_consistency_reports() -> None:
+    project_dir = _fresh_copy()
+    try:
+        config = load_project(project_dir)
+        # Run with mock provider that persists to TM
+        class PersistingMockProvider(MockProvider):
+            persists_to_tm = True
+
+        provider = PersistingMockProvider()
+        stats = run(config, provider)
+
+        bilingual_path = project_dir / "review" / "full_bilingual_report.md"
+        consistency_path = project_dir / "review" / "consistency_report.md"
+
+        assert bilingual_path.exists()
+        bilingual_content = bilingual_path.read_text(encoding="utf-8")
+        assert "| Source | Target | Category | Origin | Quality |" in bilingual_content
+        assert "Full Bilingual Translation Export" in bilingual_content
+
+        assert consistency_path.exists()
+        consistency_content = consistency_path.read_text(encoding="utf-8")
+        assert "Translation Consistency Report" in consistency_content
+    finally:
+        shutil.rmtree(project_dir.parent, ignore_errors=True)
+
+
+def test_tm_invalidation_forces_retranslation() -> None:
+    from locpipe.tm import TranslationMemory
+    from locpipe.models import Entry, TMRecord
+    from locpipe.dedupe import enrich_and_dedupe
+    from locpipe.normalize import content_hash, normalize_source
+
+    from locpipe.context_key import build_tm_key
+
+    tm = TranslationMemory(":memory:")
+    src = "Press {0} to open chest"
+    h = content_hash(normalize_source(src))
+    tm_key = build_tm_key(h, "ui", None)
+    rec = TMRecord(tm_key, src, "Nyisd ki a ladat a {0} gombbal", "en", "hu", "ui", None, 1.0, "mt")
+    tm.upsert(h, rec)
+    assert tm.get(tm_key) is not None
+
+    entry = Entry(key="chest_1", file="chest.json", source=src, target="", category="ui")
+    res1 = enrich_and_dedupe([entry], tm, "en", "hu")
+    assert res1.tm_hits == 1
+    assert res1.total_unique_strings_to_translate == 0
+
+    # Invalidate
+    deleted = tm.invalidate(h)
+    assert deleted is True
+    assert tm.get(tm_key) is None
+
+    # Next check should route to translation
+    entry2 = Entry(key="chest_1", file="chest.json", source=src, target="", category="ui")
+    res2 = enrich_and_dedupe([entry2], tm, "en", "hu")
+    assert res2.tm_hits == 0
+    assert res2.total_unique_strings_to_translate == 1
+    assert list(res2.unique_groups.values())[0][0].source == src
+
+
+def test_pseudoloc_provider_transformation() -> None:
+    import asyncio
+    from locpipe.providers.pseudoloc import PseudoLocProvider, pseudolocalize_text
+
+    # Verify text transformation
+    src = "Hello <color=red>{player}</color>, you have %d coins!"
+    out = pseudolocalize_text(src)
+    assert "<color=red>" in out
+    assert "</color>" in out
+    assert "{player}" in out
+    assert "%d" in out
+    assert any(c in out for c in "áéíőűÁÉÍŐŰ")
+    assert len(out) > len(src)
+
+    # Verify provider payload completion
+    provider = PseudoLocProvider()
+    assert provider.persists_to_tm is False
+
+    payload = json.dumps([{"id": 0, "source": src}])
+    resp = asyncio.run(provider.complete("system prompt", payload))
+    parsed = json.loads(resp)
+    assert parsed[0]["id"] == 0
+    assert "{player}" in parsed[0]["translation"]
+
+
 if __name__ == "__main__":
     test_dedup_and_context_scoping()
     test_broken_translation_gets_reviewed()

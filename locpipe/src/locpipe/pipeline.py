@@ -28,7 +28,14 @@ from .merge import merge_all
 from .models import Entry, EntryStatus, ValidationResult
 from .narrative_context import attach_narrative_context
 from .normalize import content_hash, normalize_source
-from .output import RunStats, write_review_report, write_stats
+from .consistency import find_consistency_issues
+from .output import (
+    RunStats,
+    write_consistency_report,
+    write_full_bilingual_report,
+    write_review_report,
+    write_stats,
+)
 from .providers.base import TranslationProvider
 from .review_queue import ReviewItem, write_review_queue
 from .reviewer import review_batch
@@ -970,6 +977,19 @@ def run(
 
     write_review_queue(all_review_items, config.root / "review" / "needs_review.json")
     write_review_report(all_review_items, config.root / "review" / "review_report.md")
+
+    if getattr(provider, "persists_to_tm", True):
+        write_full_bilingual_report(
+            tm.iter_all(),
+            config.root / "review" / "full_bilingual_report.md",
+            source_lang=config.source_lang,
+            target_lang=config.target_lang,
+        )
+        consistency_issues = find_consistency_issues(tm.iter_all())
+        write_consistency_report(
+            consistency_issues,
+            config.root / "review" / "consistency_report.md",
+        )
 
     if files_left_unfinished:
         print(

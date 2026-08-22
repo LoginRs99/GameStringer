@@ -12,7 +12,7 @@ import sqlite3
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Iterable, Iterator, Optional
 
 from .models import TMRecord
 
@@ -194,6 +194,33 @@ class TranslationMemory:
                 time.time(),
             ),
         )
+
+    def iter_all(self) -> Iterator[tuple[str, TMRecord]]:
+        """Yield all stored (content_hash, record) pairs from the translation memory."""
+        with self._cursor() as cur:
+            cur.execute("SELECT * FROM tm ORDER BY created_at ASC, tm_key ASC")
+            rows = cur.fetchall()
+        for row in rows:
+            record = TMRecord(
+                tm_key=row["tm_key"],
+                source=row["source"],
+                translation=row["translation"],
+                source_lang=row["source_lang"],
+                target_lang=row["target_lang"],
+                category=row["category"],
+                context_key=row["context_key"],
+                quality_score=row["quality_score"],
+                origin=row["origin"],
+                times_used=row["times_used"],
+            )
+            yield row["content_hash"], record
+
+    def invalidate(self, content_hash: str) -> bool:
+        """Delete TM records matching content_hash or tm_key. Returns True if any record was deleted."""
+        with self._cursor() as cur:
+            cur.execute("DELETE FROM tm WHERE content_hash = ? OR tm_key = ?", (content_hash, content_hash))
+            deleted = cur.rowcount > 0
+        return deleted
 
     def stats(self) -> dict:
         with self._cursor() as cur:

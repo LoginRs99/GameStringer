@@ -14,6 +14,8 @@ import yaml
 
 from locpipe.config import load_project, ProjectConfig
 from locpipe.adapters.registry import get_adapter
+from locpipe.tm import TranslationMemory
+from locpipe.normalize import content_hash, normalize_source
 from gamestringer.desktop_gui.tabs.projects_tab import get_default_projects_dir
 from gamestringer.desktop_gui.theme import (
     BG_BASE, BG_SURFACE, BG_INSET, FG_TEXT, FG_MUTED,
@@ -102,6 +104,12 @@ class AuditTab(ttk.Frame):
             tooltip="Append the selected row's JSON path regex to format_options.uabea_json_path_exclude in project.yaml"
         )
         self.btn_exclude.pack(side=tk.LEFT, padx=(0, 10))
+
+        self.btn_retranslate = action_button(
+            top_bar, "🔄 Force Retranslate", self.force_retranslate_selected,
+            tooltip="Invalidate TM translation memory entry for the selected string so it will be freshly retranslated on the next run"
+        )
+        self.btn_retranslate.pack(side=tk.LEFT, padx=(0, 10))
 
         self.pbar = progress_bar(top_bar, mode="indeterminate", length=140)
 
@@ -365,3 +373,56 @@ class AuditTab(ttk.Frame):
                 messagebox.showinfo("Already Excluded", f"Pattern for '{json_path}' is already in excludes list.", parent=self.root)
         except Exception as e:
             messagebox.showerror("Error", f"Failed to update project.yaml: {e}", parent=self.root)
+
+    def force_retranslate_selected(self):
+        sel = self.tree.selection()
+        if not sel:
+            messagebox.showinfo("Select Row", "Please select a row in the table to force retranslation.", parent=self.root)
+            return
+
+        item = self.tree.item(sel[0], "values")
+        action = item[2]
+        if action != "kept":
+            messagebox.showwarning(
+                "Invalid Selection",
+                f"Only rows with action 'kept' can be retranslated (selected row has action '{action}').",
+                parent=self.root
+            )
+            return
+
+        file_stem = item[0]
+        json_path = item[1]
+        matching_rec = next((r for r in self.audit_records if r.get("file") == file_stem and r.get("path") == json_path and r.get("action") == "kept"), None)
+        value_to_invalidate = matching_rec["value"] if matching_rec else item[3]
+
+        if not self.current_project_dir:
+            messagebox.showwarning("No Project", "Please select a project first.", parent=self.root)
+            return
+
+        preview_short = value_to_invalidate if len(value_to_invalidate) <= 80 else value_to_invalidate[:77] + "..."
+        confirm = messagebox.askyesno(
+            "Force Retranslate",
+            f"Invalidate TM entry for:\n\n\"{preview_short}\"\n\n"
+            "This will remove the string from the project translation memory, forcing it to be freshly retranslated on the next run.\n\nProceed?",
+            parent=self.root
+        )
+        if not confirm:
+            return
+
+        try:
+            config = load_project(self.current_project_dir)
+            tm = TranslationMemory(config.tm_db_path)
+            try:
+                h = content_hash(normalize_source(value_to_invalidate))
+                deleted = tm.invalidate(h) or tm.invalidate(value_to_invalidate)
+            finally:
+                tm.close()
+
+            if deleted:
+                self.lbl_status.config(text=f"🔄 Invalidated TM entry for '{preview_short}'", fg=ACCENT_MOSS)
+                messagebox.showinfo("Success", f"TM entry invalidated. The string will be retranslated on the next run.", parent=self.root)
+            else:
+                self.lbl_status.config(text=f"Notice: String was not in TM yet", fg=ACCENT_INK)
+                messagebox.showinfo("Notice", f"No existing TM entry found for this string (it will still be translated on the next run).", parent=self.root)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to invalidate TM entry: {e}", parent=self.root)

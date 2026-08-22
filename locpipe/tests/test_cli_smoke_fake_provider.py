@@ -177,3 +177,66 @@ def test_cli_init_contains_target_register(tmp_path: Path, monkeypatch: pytest.M
     cfg = load_project(tmp_path / "projects" / "new_game")
     assert cfg.target_register == "informal"
 
+
+def test_cli_pseudo_loc_run(tmp_path: Path) -> None:
+    proj_dir = _setup_sample_project(tmp_path)
+    config = load_project(proj_dir)
+
+    exit_code = main(["run", "--project", str(proj_dir), "--pseudo-loc"])
+    assert exit_code == 0
+
+    # Output file should contain pseudo-localized strings (accented chars, expansion markers)
+    xliff_path = proj_dir / "batches" / "sample.xliff"
+    tree = ET.parse(xliff_path)
+    root = tree.getroot()
+    targets = [el.text for el in root.iter() if el.tag.endswith("target") and el.text]
+    assert len(targets) == 2
+    for t in targets:
+        assert any(c in t for c in "áéíőűÁÉÍŐŰ")
+        assert "~" in t  # expansion marker
+
+    # Pseudo-loc must never persist to TM
+    from locpipe.tm import TranslationMemory
+
+    tm = TranslationMemory(config.tm_db_path)
+    with tm._cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM tm WHERE origin IN ('mt', 'reviewed')")
+        (rows,) = cur.fetchone()
+    assert rows == 0
+
+
+def test_cli_tm_invalidate(tmp_path: Path) -> None:
+    proj_dir = _setup_sample_project(tmp_path)
+    config = load_project(proj_dir)
+
+    from locpipe.tm import TranslationMemory
+    from locpipe.models import TMRecord
+    from locpipe.normalize import content_hash, normalize_source
+
+    tm = TranslationMemory(config.tm_db_path)
+    source_text = "Press {0} to open door"
+    h = content_hash(normalize_source(source_text))
+    rec = TMRecord(
+        tm_key=f"k_{h}",
+        source=source_text,
+        translation="Nyomja meg a {0} gombot az ajto kinyitasahoz",
+        source_lang="en",
+        target_lang="hu",
+        category="ui",
+        context_key=None,
+        quality_score=1.0,
+        origin="mt",
+    )
+    tm.upsert(h, rec)
+    assert tm.get(f"k_{h}") is not None
+    tm.close()
+
+    # Invalidate by source string
+    exit_code = main(["tm-invalidate", "--project", str(proj_dir), "--key", source_text])
+    assert exit_code == 0
+
+    tm2 = TranslationMemory(config.tm_db_path)
+    assert tm2.get(f"k_{h}") is None
+    tm2.close()
+
+

@@ -8,6 +8,8 @@ import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from typing import Iterable
+from .models import TMRecord
 from .review_queue import ReviewItem
 
 
@@ -100,4 +102,67 @@ def write_review_report(items: list[ReviewItem], path: Path) -> None:
         for issue in item.validation.all_issues:
             lines.append(f"  - [{issue.severity.value}] {issue.message}")
         lines.append("")
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def write_full_bilingual_report(
+    records: Iterable[tuple[str, TMRecord] | TMRecord],
+    path: Path,
+    source_lang: str = "en",
+    target_lang: str = "hu",
+) -> None:
+    """Write complete bilingual review report covering every translated string in the TM."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rows: list[TMRecord] = []
+    for item in records:
+        rec = item[1] if isinstance(item, tuple) else item
+        rows.append(rec)
+
+    # Sort deterministically by category, source
+    rows.sort(key=lambda r: (r.category or "", r.source))
+
+    lines = [
+        f"# Full Bilingual Translation Export — {len(rows)} unique strings",
+        "",
+        f"**Source Language**: `{source_lang}` | **Target Language**: `{target_lang}`",
+        "",
+        "| Source | Target | Category | Origin | Quality |",
+        "|---|---|---|---|---|",
+    ]
+    for r in rows:
+        src = r.source.replace("\n", " ").replace("|", "\\|")
+        tgt = r.translation.replace("\n", " ").replace("|", "\\|")
+        cat = (r.category or "").replace("|", "\\|")
+        origin = (r.origin or "").replace("|", "\\|")
+        quality = f"{r.quality_score:.2f}" if r.quality_score is not None else "-"
+        lines.append(f"| {src} | {tgt} | {cat} | {origin} | {quality} |")
+
+    lines.append("")
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def write_consistency_report(issues: list[dict], path: Path) -> None:
+    """Write fuzzy translation consistency report (zero-cost difflib scan)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [
+        f"# Translation Consistency Report — {len(issues)} potential inconsistencies flagged",
+        "",
+        "> [!NOTE]",
+        "> This report is advisory only (zero API cost, computed via difflib similarity).",
+        "> Highly similar source strings with different translations are flagged for human review.",
+        "> Variations may be intentional depending on character voice, context, or category.",
+        "",
+        "| Similarity | Source A | Target A | Source B | Target B | Categories |",
+        "|---|---|---|---|---|---|",
+    ]
+    for iss in issues:
+        sim_pct = f"{iss['similarity'] * 100:.1f}%"
+        s_a = iss["source_a"].replace("\n", " ").replace("|", "\\|")
+        t_a = iss["target_a"].replace("\n", " ").replace("|", "\\|")
+        s_b = iss["source_b"].replace("\n", " ").replace("|", "\\|")
+        t_b = iss["target_b"].replace("\n", " ").replace("|", "\\|")
+        cats = f"{iss.get('category_a', '')} / {iss.get('category_b', '')}".replace("|", "\\|")
+        lines.append(f"| {sim_pct} | {s_a} | {t_a} | {s_b} | {t_b} | {cats} |")
+
+    lines.append("")
     path.write_text("\n".join(lines), encoding="utf-8")

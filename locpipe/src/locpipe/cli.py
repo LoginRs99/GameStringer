@@ -121,9 +121,15 @@ def cmd_init(args: argparse.Namespace) -> int:
 def _build_provider(
     config,
     dry_run: bool,
+    pseudo_loc: bool = False,
     model_override: str | None = None,
     effort_override: str | None = None,
 ):
+    if pseudo_loc:
+        from .providers.pseudoloc import PseudoLocProvider
+
+        return PseudoLocProvider()
+
     if dry_run:
         from .providers.mock import MockProvider
 
@@ -205,14 +211,16 @@ def cmd_audit(args: argparse.Namespace) -> int:
 def cmd_run(args: argparse.Namespace) -> int:
     config = load_project(args.project)
     limit = args.limit or args.sample
+    pseudo_loc = getattr(args, "pseudo_loc", False)
 
     # Pre-flight report (Phase 10)
+    mode_str = "PSEUDO-LOC (PseudoLocProvider)" if pseudo_loc else ("DRY-RUN (MockProvider)" if args.dry_run else config.provider.mode)
     print("=== PRE-FLIGHT TRANSLATION REPORT ===")
     print(f"  Project:        {config.project}")
     print(f"  Source -> Target: {config.source_lang} -> {config.target_lang}")
     print(f"  Format:         {config.format}")
     print(f"  Provider:       {config.provider.name} (model: {config.provider.model}, effort: {config.provider.effort})")
-    print(f"  Mode:           {'DRY-RUN (MockProvider)' if args.dry_run else config.provider.mode}")
+    print(f"  Mode:           {mode_str}")
     if args.max_api_calls:
         print(f"  Safety Budget:  Max {args.max_api_calls} API call(s)")
     if limit:
@@ -220,13 +228,14 @@ def cmd_run(args: argparse.Namespace) -> int:
     print("=====================================")
     print()
 
-    provider = _build_provider(config, args.dry_run)
+    provider = _build_provider(config, args.dry_run, pseudo_loc=pseudo_loc)
 
     review_model = config.provider.review_model or config.provider.model
     review_effort = config.provider.review_effort or "high"
     review_provider = _build_provider(
         config,
         args.dry_run,
+        pseudo_loc=pseudo_loc,
         model_override=review_model,
         effort_override=review_effort,
     )
@@ -236,6 +245,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     escalation_provider = _build_provider(
         config,
         args.dry_run,
+        pseudo_loc=pseudo_loc,
         model_override=escalation_model,
         effort_override=escalation_effort,
     )
@@ -362,6 +372,29 @@ def cmd_verify(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_tm_invalidate(args: argparse.Namespace) -> int:
+    config = load_project(args.project)
+    from .tm import TranslationMemory
+    from .normalize import content_hash, normalize_source
+
+    tm = TranslationMemory(config.tm_db_path)
+    try:
+        raw_key = args.key
+        deleted = tm.invalidate(raw_key)
+        if not deleted:
+            h = content_hash(normalize_source(raw_key))
+            deleted = tm.invalidate(h)
+
+        if deleted:
+            print(f"✅ Successfully invalidated TM entry for '{raw_key}' in {config.project}.")
+            return 0
+        else:
+            print(f"⚠ No matching TM entry found for '{raw_key}' in {config.project}.", file=sys.stderr)
+            return 1
+    finally:
+        tm.close()
+
+
 def main(argv: list[str] | None = None) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -399,10 +432,16 @@ def main(argv: list[str] | None = None) -> int:
     p_run = sub.add_parser("run", help="run the pipeline for a project")
     p_run.add_argument("--project", required=True, help="path to the project directory")
     p_run.add_argument("--dry-run", action="store_true", help="use the mock provider, no API calls")
+    p_run.add_argument("--pseudo-loc", action="store_true", help="run deterministic pseudo-localization with ~30% expansion and accented glyphs, no API calls")
     p_run.add_argument("--limit", type=int, default=None, help="only process the first N batch files")
     p_run.add_argument("--sample", type=int, default=None, help="alias for --limit")
     p_run.add_argument("--max-api-calls", type=int, default=None, help="hard ceiling on total LLM API completion requests")
     p_run.set_defaults(func=cmd_run)
+
+    p_inv = sub.add_parser("tm-invalidate", help="invalidate a TM entry to force retranslation on next run")
+    p_inv.add_argument("--project", required=True, help="path to the project directory")
+    p_inv.add_argument("--key", required=True, help="source string or content hash to invalidate")
+    p_inv.set_defaults(func=cmd_tm_invalidate)
 
     args = parser.parse_args(argv)
     return args.func(args)
