@@ -97,9 +97,20 @@ class AntigravityCLIProvider(TranslationProvider):
             # keyring from an interactive `agy auth login`, which this can't see.
             pass
         self.model = model
+        self.max_concurrency = max_concurrency
         self.timeout_s = timeout_s
         self.effort = effort or "low"
-        self._semaphore = asyncio.Semaphore(max_concurrency)
+        self._semaphores: dict[asyncio.AbstractEventLoop, asyncio.Semaphore] = {}
+
+    @property
+    def semaphore(self) -> asyncio.Semaphore:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.Semaphore(self.max_concurrency)
+        if loop not in self._semaphores:
+            self._semaphores[loop] = asyncio.Semaphore(self.max_concurrency)
+        return self._semaphores[loop]
 
     def _run_agy(self, full_prompt: str, effort: Optional[str] = None) -> str:
         # To avoid Windows command-line character length limit (32,767 chars),
@@ -229,7 +240,7 @@ class AntigravityCLIProvider(TranslationProvider):
                 f"Prompt length ({len(full_prompt)} chars) is close to the Windows 32,767 command-line limit. "
                 "Consider reducing category batch_size in project.yaml."
             )
-        async with self._semaphore:
+        async with self.semaphore:
             stdout = await asyncio.to_thread(self._run_agy, full_prompt, effort)
 
         # Gate 3: does it actually parse as the shape we asked for? An agent

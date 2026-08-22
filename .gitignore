@@ -18,6 +18,13 @@ dist/
 gui_settings.json
 gamestringer_gui_settings.json
 
+# Game translation projects & dumps (DMCA prevention)
+locpipe/projects/
+projects/
+*.sqlite3
+checkpoint.json
+audit_report.md
+
 # IDE
 .vscode/
 .idea/
