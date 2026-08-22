@@ -82,6 +82,13 @@ class RunTab(ttk.Frame):
         )
         r_lim.pack(side=tk.LEFT, padx=(0, 10))
 
+        self.var_max_api_calls = tk.StringVar(value="500")
+        r_max_calls, _ = labeled_entry(
+            top_bar, "Max API Calls:", self.var_max_api_calls, width=6, label_width=13,
+            tooltip="Hard safety ceiling on total LLM API calls for this run. Stops the pipeline cleanly (no data loss — already-finished files stay committed) once reached. Leave blank only if you intend an unlimited run."
+        )
+        r_max_calls.pack(side=tk.LEFT, padx=(0, 10))
+
         self.btn_plan = action_button(
             top_bar, "📋 Run Plan (Dry Estimate)", self._run_plan,
             tooltip="Dry run: calculates exact batch counts, deduplication, and input/output token estimates with ZERO API calls"
@@ -279,12 +286,22 @@ class RunTab(ttk.Frame):
         limit_val = self.var_limit.get().strip()
         limit_desc = f"{limit_val} batch(es) only" if limit_val.isdigit() else "NO LIMIT (Full Project)"
 
+        max_calls_val = self.var_max_api_calls.get().strip()
+        if max_calls_val.isdigit() and int(max_calls_val) > 0:
+            max_calls_desc = f"{max_calls_val} calls max"
+        else:
+            max_calls_desc = "UNLIMITED"
+
         warning_msg = (
             f"Launch Live Translation Run?\n\n"
             f"• Project: {proj_name}\n"
             f"• Batch Scope: {limit_desc}\n"
+            f"• Max API Calls: {max_calls_desc}\n"
             f"• Provider: Antigravity CLI (Gemini 3.7 Flash)\n\n"
         )
+        if not (max_calls_val.isdigit() and int(max_calls_val) > 0):
+            warning_msg += "⚠️ Warning: Max API Calls is UNLIMITED. If this is a large project, setting a safety ceiling (e.g. 500) is recommended to prevent unintended API usage.\n\n"
+
         if not self.has_run_plan_in_session:
             warning_msg += "⚠️ Note: You have not run 'Plan' yet in this session. Running Plan first is recommended to verify token estimates.\n\n"
 
@@ -320,6 +337,8 @@ class RunTab(ttk.Frame):
         ]
         if limit_val.isdigit():
             cmd.extend(["--limit", limit_val])
+        if max_calls_val.isdigit() and int(max_calls_val) > 0:
+            cmd.extend(["--max-api-calls", max_calls_val])
 
         self._log(f"\n>>> Starting pipeline: {' '.join(cmd)}\n", "cyan")
         self.lbl_stats.config(text=f"Translation in progress for '{proj_name}' via Antigravity CLI...", fg=ACCENT_MOSS)

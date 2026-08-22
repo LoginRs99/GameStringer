@@ -159,13 +159,62 @@ def test_run_tab_confirmation_dialog(tk_root, tmp_path):
     with patch("gamestringer.desktop_gui.tabs.run_tab.get_default_projects_dir", return_value=tmp_path / "locpipe" / "projects"):
         tab = RunTab(tk.Frame(tk_root), tk_root)
         tab.select_project("proj_run_test")
+        assert tab.var_max_api_calls.get() == "500"
 
         # When user clicks Cancel on confirmation, no process is started
         with patch("tkinter.messagebox.askyesno", return_value=False) as mock_confirm:
             tab._start_translation()
             assert mock_confirm.called
+            msg = mock_confirm.call_args[0][1]
+            assert "500 calls max" in msg
             assert tab.is_running is False
             assert tab.active_process is None
+
+
+def test_run_tab_max_api_calls_unlimited_and_command(tk_root, tmp_path):
+    p1 = tmp_path / "locpipe" / "projects" / "proj_run_test"
+    p1.mkdir(parents=True)
+    (p1 / "project.yaml").write_text("project: proj_run_test\nsource_lang: en\ntarget_lang: hu\nformat: uabea_json\n", encoding="utf-8")
+
+    with patch("gamestringer.desktop_gui.tabs.run_tab.get_default_projects_dir", return_value=tmp_path / "locpipe" / "projects"):
+        tab = RunTab(tk.Frame(tk_root), tk_root)
+        tab.select_project("proj_run_test")
+
+        # Test default passes --max-api-calls 500
+        with patch("tkinter.messagebox.askyesno", return_value=True), \
+             patch("threading.Thread", side_effect=lambda target, **kwargs: MagicMock(start=target)), \
+             patch("subprocess.Popen") as mock_popen:
+            mock_proc = MagicMock()
+            mock_proc.stdout.readline.return_value = ""
+            mock_proc.poll.return_value = 0
+            mock_proc.returncode = 0
+            mock_popen.return_value = mock_proc
+
+            tab._start_translation()
+            cmd_args = mock_popen.call_args[0][0]
+            assert "--max-api-calls" in cmd_args
+            idx = cmd_args.index("--max-api-calls")
+            assert cmd_args[idx + 1] == "500"
+
+            # Reset tab state
+            tab.is_running = False
+
+        # Test blank / unlimited
+        tab.var_max_api_calls.set("")
+        with patch("tkinter.messagebox.askyesno", return_value=True) as mock_confirm, \
+             patch("threading.Thread", side_effect=lambda target, **kwargs: MagicMock(start=target)), \
+             patch("subprocess.Popen") as mock_popen:
+            mock_proc = MagicMock()
+            mock_proc.stdout.readline.return_value = ""
+            mock_proc.poll.return_value = 0
+            mock_proc.returncode = 0
+            mock_popen.return_value = mock_proc
+
+            tab._start_translation()
+            msg = mock_confirm.call_args[0][1]
+            assert "UNLIMITED" in msg
+            cmd_args = mock_popen.call_args[0][0]
+            assert "--max-api-calls" not in cmd_args
 
 
 def test_settings_persistence(tk_root, tmp_path):

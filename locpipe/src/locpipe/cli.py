@@ -396,7 +396,6 @@ def main(argv: list[str] | None = None) -> int:
     p_run.add_argument("--limit", type=int, default=None, help="only process the first N batch files")
     p_run.add_argument("--sample", type=int, default=None, help="alias for --limit")
     p_run.add_argument("--max-api-calls", type=int, default=None, help="hard ceiling on total LLM API completion requests")
-    p_run.add_argument("--yes", action="store_true", help="bypass confirmation prompt for full runs")
     p_run.set_defaults(func=cmd_run)
 
     args = parser.parse_args(argv)
