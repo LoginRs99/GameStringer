@@ -438,13 +438,23 @@ class UABEAJsonAdapter(FormatAdapter):
 
         return out_buf.getvalue()
 
-    def _set_json_path_value(self, data: dict, json_path: List[str], target_value: str) -> None:
+    def _set_json_path_value(self, data: Any, json_path: List[str], target_value: str) -> None:
         curr = data
         for p in json_path[:-1]:
             if isinstance(curr, dict) and p in curr:
                 curr = curr[p]
+            elif isinstance(curr, list) and (isinstance(p, int) or (isinstance(p, str) and p.isdigit())):
+                idx = int(p)
+                if 0 <= idx < len(curr):
+                    curr = curr[idx]
+                else:
+                    return
             else:
                 return
         last_key = json_path[-1]
         if isinstance(curr, dict):
             curr[last_key] = target_value
+        elif isinstance(curr, list) and (isinstance(last_key, int) or (isinstance(last_key, str) and last_key.isdigit())):
+            idx = int(last_key)
+            if 0 <= idx < len(curr):
+                curr[idx] = target_value
