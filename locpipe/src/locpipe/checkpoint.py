@@ -61,9 +61,13 @@ class Checkpoint:
 
     def _load(self) -> dict:
         if self.path.exists():
-            data = json.loads(self.path.read_text(encoding="utf-8"))
-            data.setdefault("completed_files", [])
-            return data
+            try:
+                data = json.loads(self.path.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    data.setdefault("completed_files", [])
+                    return data
+            except Exception:
+                pass
         return {"completed_batches": [], "pending_job": None, "last_updated": None, "completed_files": []}
 
     def _save(self) -> None:
