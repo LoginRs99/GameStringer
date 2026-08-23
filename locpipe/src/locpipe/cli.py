@@ -109,7 +109,15 @@ def cmd_init(args: argparse.Namespace) -> int:
         ("glossary.md", "# Glossary\n\n| Source term | Target translation | Category | Confidence | Source/justification |\n|---|---|---|---|---|\n"),
         ("lang-style.md", "# Language style guide\n"),
         ("character-voices.md", "# Character voice bible\n\n| Character | Register | Traits | Avoid |\n|---|---|---|---|\n"),
-        ("anti-fabrication-checklist.md", "# Anti-fabrication checklist\n"),
+        ("anti-fabrication-checklist.md", (
+            "# Anti-fabrication checklist\n"
+            "Never invent numbers, names, or quantities not present in the source.\n"
+            "Never drop content present in the source without a clear formatting reason.\n\n"
+            "This is about content, not sentence shape: restructuring word order, splitting or joining clauses, "
+            "or moving a preverb for natural Hungarian focus (see lang-style.md) is not fabrication or dropped content "
+            "as long as the same information survives. Judge by meaning preserved, not by how closely the sentence "
+            "structure mirrors the source.\n"
+        )),
     ]:
         (root / "resources" / fname).write_text(header, encoding="utf-8")
     print(f"Created projects/{args.name}/. Edit project.yaml, drop batch files in batches/, then:")
@@ -395,6 +403,160 @@ def cmd_tm_invalidate(args: argparse.Namespace) -> int:
         tm.close()
 
 
+def cmd_bootstrap_resources(args: argparse.Namespace) -> int:
+    import asyncio
+    import json
+    from .tm import TranslationMemory
+    from .bootstrap import (
+        update_existing_anti_fabrication_checklist,
+        filter_glossary_candidates,
+        bootstrap_glossary,
+        bootstrap_lang_style,
+        bootstrap_character_voices,
+        _load_agent_template,
+    )
+
+    config = load_project(args.project)
+
+    # 1. Check/update existing empty anti-fabrication checklist
+    updated_af = update_existing_anti_fabrication_checklist(config)
+
+    # 2. Check TM
+    tm_path = Path(config.tm_db_path)
+    if not tm_path.exists():
+        print(f"Error: Translation Memory not found at {tm_path}. Translate files first before bootstrapping resources.", file=sys.stderr)
+        return 1
+
+    tm = TranslationMemory(config.tm_db_path)
+    try:
+        all_tm_records = list(tm.iter_all())
+    finally:
+        tm.close()
+
+    if not all_tm_records:
+        print(f"Error: Translation Memory at {tm_path} is empty. No translations available to bootstrap resources from.", file=sys.stderr)
+        return 1
+
+    run_glossary = not args.skip_glossary
+    run_lang_style = not args.skip_lang_style
+    run_character_voices = not args.skip_character_voices
+
+    glossary_candidates = []
+    total_tm = len(all_tm_records)
+    if run_glossary:
+        glossary_candidates, _ = filter_glossary_candidates(all_tm_records)
+
+    lang_style_samples_count = min(60, total_tm) if run_lang_style else 0
+
+    adapter = get_adapter(config.format, config.format_options)
+    speaker_count = 0
+    if run_character_voices:
+        speakers = set()
+        for p in config.batch_files:
+            try:
+                for e in adapter.extract(p):
+                    if e.speaker and e.speaker.strip():
+                        speakers.add(e.speaker.strip())
+            except Exception:
+                pass
+        speaker_count = len(speakers)
+
+    # Cost & token estimates (reusing char/4 heuristic)
+    est_calls = 0
+    est_input_tokens = 0
+
+    if run_glossary and glossary_candidates:
+        est_calls += 1
+        g_chars = len(json.dumps(glossary_candidates[:350], ensure_ascii=False))
+        est_input_tokens += (len(_load_agent_template("glossary-bootstrap.md")) + g_chars) // 4
+
+    if run_lang_style and lang_style_samples_count > 0:
+        est_calls += 1
+        est_input_tokens += 2500
+
+    if run_character_voices and speaker_count > 0:
+        est_calls += 1
+        est_input_tokens += 500 + (speaker_count * 300)
+
+    print("=== BOOTSTRAP RESOURCES PLAN & ESTIMATE ===")
+    print(f"  Project:                      {config.project}")
+    print(f"  Anti-fabrication checklist:   {'Updated template to standard' if updated_af else 'Up to date'}")
+    if run_glossary:
+        print(f"  Glossary Candidates:         {total_tm:,} total TM strings -> {len(glossary_candidates):,} pre-filtered candidate terms")
+    else:
+        print(f"  Glossary:                     Skipped (--skip-glossary)")
+
+    if run_lang_style:
+        print(f"  Language Style Sample:        {lang_style_samples_count} representative translated strings")
+    else:
+        print(f"  Language Style:               Skipped (--skip-lang-style)")
+
+    if run_character_voices:
+        if speaker_count > 0:
+            print(f"  Character Voices:             Found {speaker_count} speaker(s) with metadata")
+        else:
+            print(f"  Character Voices:             this project's format doesn't carry speaker metadata — skipping character-voices bootstrap")
+    else:
+        print(f"  Character Voices:             Skipped (--skip-character-voices)")
+
+    review_model = config.provider.review_model or config.provider.model or "gemini-3.7-flash"
+    print(f"  Provider & Model:             {config.provider.name} ({review_model}, effort: high)")
+    print(f"  Estimated LLM Calls:          {est_calls}")
+    print(f"  Estimated Total Input Tokens: ~{est_input_tokens:,}")
+    print("===========================================")
+
+    if est_calls == 0 and not updated_af:
+        print("No bootstrap tasks to run.")
+        return 0
+
+    if not getattr(args, "yes", False) and not getattr(args, "dry_run", False) and est_calls > 0:
+        try:
+            resp = input("Proceed with LLM resource bootstrapping? [y/N]: ").strip().lower()
+            if resp not in ("y", "yes"):
+                print("Bootstrap canceled.")
+                return 0
+        except (EOFError, KeyboardInterrupt):
+            print("\nBootstrap canceled.")
+            return 0
+
+    provider = _build_provider(
+        config,
+        dry_run=getattr(args, "dry_run", False),
+        model_override=review_model,
+        effort_override="high",
+    )
+
+    out_files: list[str] = []
+
+    if run_glossary and glossary_candidates:
+        print("Drafting glossary.draft.md...")
+        out_g = asyncio.run(bootstrap_glossary(config, provider, glossary_candidates))
+        if out_g:
+            out_files.append(f"• Glossary:         {out_g}")
+
+    if run_lang_style and lang_style_samples_count > 0:
+        print("Drafting lang-style.draft.md...")
+        out_ls = asyncio.run(bootstrap_lang_style(config, provider))
+        if out_ls:
+            out_files.append(f"• Language Style:   {out_ls}")
+
+    if run_character_voices:
+        if speaker_count > 0:
+            print("Drafting character-voices.draft.md...")
+            out_cv, cv_err = asyncio.run(bootstrap_character_voices(config, provider))
+            if out_cv:
+                out_files.append(f"• Character Voices: {out_cv}")
+        else:
+            print("this project's format doesn't carry speaker metadata — skipping character-voices bootstrap")
+
+    print("\n=== BOOTSTRAP COMPLETED ===")
+    for item in out_files:
+        print(f"  {item}")
+    print("\nNOTE: Draft files (*.draft.md) are advisory drafts. Review and edit them manually before promoting/renaming into canonical resource files.")
+    print("===========================")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -442,6 +604,15 @@ def main(argv: list[str] | None = None) -> int:
     p_inv.add_argument("--project", required=True, help="path to the project directory")
     p_inv.add_argument("--key", required=True, help="source string or content hash to invalidate")
     p_inv.set_defaults(func=cmd_tm_invalidate)
+
+    p_boot = sub.add_parser("bootstrap-resources", help="draft glossary, lang-style, and character-voices resource files from TM")
+    p_boot.add_argument("--project", required=True, help="path to the project directory")
+    p_boot.add_argument("--skip-glossary", action="store_true", help="skip drafting glossary.draft.md")
+    p_boot.add_argument("--skip-lang-style", action="store_true", help="skip drafting lang-style.draft.md")
+    p_boot.add_argument("--skip-character-voices", action="store_true", help="skip drafting character-voices.draft.md")
+    p_boot.add_argument("--dry-run", action="store_true", help="use mock provider, no API calls")
+    p_boot.add_argument("--yes", action="store_true", help="skip interactive confirmation prompt")
+    p_boot.set_defaults(func=cmd_bootstrap_resources)
 
     args = parser.parse_args(argv)
     return args.func(args)

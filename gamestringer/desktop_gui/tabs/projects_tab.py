@@ -786,7 +786,15 @@ class ProjectsTab(ttk.Frame):
             ("glossary.md", "# Glossary\n\n| Source term | Target translation | Category | Confidence | Source/justification |\n|---|---|---|---|---|\n"),
             ("lang-style.md", "# Language style guide\n"),
             ("character-voices.md", "# Character voice bible\n\n| Character | Register | Traits | Avoid |\n|---|---|---|---|\n"),
-            ("anti-fabrication-checklist.md", "# Anti-fabrication checklist\n"),
+            ("anti-fabrication-checklist.md", (
+                "# Anti-fabrication checklist\n"
+                "Never invent numbers, names, or quantities not present in the source.\n"
+                "Never drop content present in the source without a clear formatting reason.\n\n"
+                "This is about content, not sentence shape: restructuring word order, splitting or joining clauses, "
+                "or moving a preverb for natural Hungarian focus (see lang-style.md) is not fabrication or dropped content "
+                "as long as the same information survives. Judge by meaning preserved, not by how closely the sentence "
+                "structure mirrors the source.\n"
+            )),
         ]:
             (proj_dir / "resources" / fname).write_text(header, encoding="utf-8")
 

@@ -36,8 +36,47 @@ class MockProvider(TranslationProvider):
     ) -> str:
         parsed = json.loads(user_payload)
 
-        if isinstance(parsed, list):  # bulk-translation shape: [{"id","source",...}, ...]
+        # 1. Bulk-translation shape: [{"id": 0, "source": "..."}, ...]
+        if isinstance(parsed, list) and len(parsed) > 0 and isinstance(parsed[0], dict) and "id" in parsed[0]:
             out = [{"id": item["id"], "translation": f"[MOCK-HU] {item['source']}"} for item in parsed]
+            return json.dumps(out, ensure_ascii=False)
+
+        # 2. Review shape: {"items": [{"key": "...", "source": "..."}, ...]}
+        if isinstance(parsed, dict) and "items" in parsed:
+            out = [
+                {
+                    "key": item["key"],
+                    "translation": f"[MOCK-REVIEWED] {item['source']}",
+                    "flag_for_human": False,
+                    "reason": "",
+                }
+                for item in parsed["items"]
+            ]
+            return json.dumps(out, ensure_ascii=False)
+
+        # 3. Bootstrap Glossary shape
+        if "terminology" in system_prompt.lower() or "glossary-bootstrap" in system_prompt.lower() or ("# Glossary" in system_prompt and "Category" in system_prompt):
+            lines = [
+                "# Glossary\n\n| Source term | Target translation | Category | Confidence | Source/justification |\n|---|---|---|---|---|"
+            ]
+            sample = parsed if isinstance(parsed, list) else []
+            for item in sample[:5]:
+                src = item.get("source", "Term") if isinstance(item, dict) else "Term"
+                tgt = item.get("translation", f"[MOCK-HU] {src}") if isinstance(item, dict) else "[MOCK-HU]"
+                cat = item.get("category", "mechanic") if isinstance(item, dict) else "mechanic"
+                lines.append(f"| {src} | {tgt} | {cat} | 1.0 | Mock term |")
+            return "\n".join(lines)
+
+        # 4. Bootstrap Language Style Guide shape
+        if "style director" in system_prompt.lower() or "# Language style guide" in system_prompt:
+            return "# Language style guide\n\n- Informal register (tegezés)\n- Standard Hungarian focus syntax\n"
+
+        # 5. Bootstrap Character Voice shape
+        if "voice bible" in system_prompt.lower() or "# Character voice bible" in system_prompt:
+            return "# Character voice bible\n\n| Character | Register | Traits | Avoid |\n|---|---|---|---|\n| Hero | informal | courageous | slang |\n"
+
+        if isinstance(parsed, list):
+            out = [{"id": idx, "translation": f"[MOCK-HU] {item.get('source', '')}"} for idx, item in enumerate(parsed)]
             return json.dumps(out, ensure_ascii=False)
 
         if isinstance(parsed, dict) and "items" in parsed:  # review shape
