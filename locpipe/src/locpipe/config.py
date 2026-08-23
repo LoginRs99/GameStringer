@@ -33,7 +33,7 @@ class CategoryRule:
     match_source_regex: Optional[str] = None
     match_speaker_present: Optional[bool] = None
     needs_character_voice: bool = False
-    batch_size: int = 350
+    batch_size: int = 200
     is_default: bool = False
     # Override the project-wide confidence.max_expansion_ratio for just this
     # category. None = use the project default. Point of this: a UI/button
@@ -245,7 +245,7 @@ def load_project(project_dir: str | Path) -> ProjectConfig:
     }
 
     categories_raw = raw.get("categories") or [
-        {"name": "default", "default": True, "batch_size": 350}
+        {"name": "default", "default": True, "batch_size": 200}
     ]
     categories = [
         CategoryRule(

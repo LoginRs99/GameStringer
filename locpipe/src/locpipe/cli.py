@@ -57,7 +57,7 @@ categories:
   - name: ui
     default: true
     needs_character_voice: false
-    batch_size: 350
+    batch_size: 200
     max_expansion_ratio: 1.3   # tighter: buttons/labels are the ones that actually clip
     default_max_length: 40     # only if you know real UI limits and the format has no
                                # native length column (e.g. Unity CSV/.po usually don't) --

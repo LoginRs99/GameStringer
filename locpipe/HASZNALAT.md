@@ -135,7 +135,7 @@ categories:
   - name: ui
     default: true
     needs_character_voice: false
-    batch_size: 350
+    batch_size: 200
     max_expansion_ratio: 1.3
 
 provider:
