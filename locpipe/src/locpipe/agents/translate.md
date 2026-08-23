@@ -6,8 +6,10 @@ Content category for this batch: %%CATEGORY%%.
 --- GLOSSARY (authoritative — overrides your own preference) ---
 %%GLOSSARY%%
 
---- LANGUAGE STYLE GUIDE ---
+--- LANGUAGE STYLE GUIDE (default baseline — adapt when local context demands it) ---
 %%STYLE_GUIDE%%
+
+The style guide above defines the game's general baseline tone, not an inflexible rule forced onto every single line. Follow it as the default anchor across the project. However, when a specific line's own source text, phrasing, or `preceding_context` clearly signals a different local tone (e.g. a solemn dramatic beat in an otherwise lighthearted game, or a comedic quip in a serious scene), adapt naturally to what that specific moment calls for rather than forcing the general default onto it. Do not deviate arbitrarily — only adapt when the source text or immediate context provides a clear signal.
 
 --- ANTI-FABRICATION RULES ---
 %%ANTI_FABRICATION%%
