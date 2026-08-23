@@ -8,6 +8,9 @@ import json
 import os
 from pathlib import Path
 import shutil
+import subprocess
+import sys
+import threading
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 from typing import Any, Callable, Dict, List, Optional
@@ -20,11 +23,21 @@ from gamestringer.desktop_gui.theme import (
 )
 from gamestringer.desktop_gui.tooltip import create_tooltip
 from gamestringer.desktop_gui.widgets import (
-    section_frame, labeled_entry, labeled_combo, labeled_checkbutton, action_button
+    section_frame, labeled_entry, labeled_combo, labeled_checkbutton, action_button, progress_bar
 )
+from locpipe.presets import LANG_STYLE_PRESETS, DEFAULT_LANG_STYLE_HEADER
 
 
 _DEFAULT_CHAR_FALLBACK = {"ő": "ô", "ű": "û", "Ő": "Ô", "Ű": "Û"}
+
+
+def open_folder(path: Path):
+    if sys.platform == "win32":
+        os.startfile(str(path))
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", str(path)])
+    else:
+        subprocess.Popen(["xdg-open", str(path)])
 
 
 def get_default_projects_dir() -> Path:
@@ -426,6 +439,35 @@ class ProjectsTab(ttk.Frame):
         )
         r_ee.pack(side=tk.LEFT)
 
+        # Section: Language Resources & Style Presets
+        sec_res = section_frame(form, "Language Resources & Style Presets", padding=10)
+        sec_res.pack(fill=tk.X, pady=8)
+
+        r_lp = ttk.Frame(sec_res, style="Card.TFrame")
+        r_lp.pack(fill=tk.X, pady=3)
+
+        self.var_lang_style_preset = tk.StringVar(value="Custom (edit manually)")
+        preset_options = ["Custom (edit manually)"] + list(LANG_STYLE_PRESETS.keys())
+        r_lsp, self.combo_lang_style_preset = labeled_combo(
+            r_lp, "Style Preset:", self.var_lang_style_preset,
+            values=preset_options,
+            width=32, label_width=16, state="readonly",
+            tooltip="Select a Hungarian language style preset to auto-populate resources/lang-style.md. Guarded against accidental overwrites of custom guides."
+        )
+        r_lsp.pack(side=tk.LEFT, padx=(0, 10))
+        self.combo_lang_style_preset.bind("<<ComboboxSelected>>", self._on_lang_style_preset_selected)
+
+        action_button(
+            r_lp, "📁 Open Resources", self._open_resources_folder,
+            tooltip="Open project's resources/ folder in file manager"
+        ).pack(side=tk.LEFT, padx=(0, 10))
+
+        action_button(
+            r_lp, "⚡ Bootstrap Resources (from TM)", self._on_bootstrap_resources,
+            style="Primary.TButton",
+            tooltip="AI-draft glossary, style guide, and character voice bible from existing Translation Memory (TM)"
+        ).pack(side=tk.LEFT)
+
         # Section: Format Options
         sec_opt = section_frame(form, "Format Options", padding=10)
         sec_opt.pack(fill=tk.X, pady=8)
@@ -523,6 +565,190 @@ class ProjectsTab(ttk.Frame):
         self.lbl_status.pack(side=tk.LEFT, padx=15)
 
         self._bind_dirty_events()
+
+    def _detect_current_lang_style_preset(self):
+        if not self.current_project_path:
+            self.var_lang_style_preset.set("Custom (edit manually)")
+            return
+        ls_path = self.current_project_path / "resources" / "lang-style.md"
+        if not ls_path.exists():
+            self.var_lang_style_preset.set("Custom (edit manually)")
+            return
+        content = ls_path.read_text(encoding="utf-8").strip()
+        matched = "Custom (edit manually)"
+        for name, preset_text in LANG_STYLE_PRESETS.items():
+            if content == preset_text.strip():
+                matched = name
+                break
+        self.var_lang_style_preset.set(matched)
+
+    def _on_lang_style_preset_selected(self, event=None):
+        if not self.current_project_path:
+            return
+        selected = self.var_lang_style_preset.get()
+        if selected == "Custom (edit manually)":
+            return
+
+        preset_text = LANG_STYLE_PRESETS.get(selected)
+        if not preset_text:
+            return
+
+        ls_path = self.current_project_path / "resources" / "lang-style.md"
+        ls_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if ls_path.exists():
+            current_content = ls_path.read_text(encoding="utf-8").strip()
+            if current_content == preset_text.strip():
+                return
+            if current_content and current_content not in ("# Language style guide", "# Language style guide\n"):
+                confirm = messagebox.askyesno(
+                    "Overwrite Language Style Guide?",
+                    f"resources/lang-style.md in '{self.current_project_path.name}' already contains custom content.\n\n"
+                    f"Do you want to overwrite it with the '{selected}' preset?",
+                    parent=self.root,
+                    icon="warning"
+                )
+                if not confirm:
+                    self._detect_current_lang_style_preset()
+                    return
+
+        ls_path.write_text(preset_text, encoding="utf-8")
+        self.lbl_status.config(text=f"Applied preset: {selected}", fg=ACCENT_MOSS)
+
+    def _open_resources_folder(self):
+        if not self.current_project_path:
+            messagebox.showwarning("No Project", "Please select a project first.", parent=self.root)
+            return
+        res_dir = self.current_project_path / "resources"
+        res_dir.mkdir(parents=True, exist_ok=True)
+        open_folder(res_dir)
+
+    def _on_bootstrap_resources(self):
+        if not self.current_project_path:
+            messagebox.showwarning("No Project", "Please select a project first.", parent=self.root)
+            return
+
+        proj_dir = self.current_project_path
+        tm_path = proj_dir / "tm" / "translation_memory.sqlite3"
+        if not tm_path.exists():
+            messagebox.showwarning(
+                "No Translation Memory",
+                f"Translation Memory not found at:\n{tm_path}\n\n"
+                "Please run a test translation (or full translation) first so there are translated records in TM to bootstrap from.",
+                parent=self.root
+            )
+            return
+
+        confirm = messagebox.askyesno(
+            "Bootstrap Resources",
+            f"Launch AI Resource Bootstrapping for '{proj_dir.name}'?\n\n"
+            "This will analyze your Translation Memory (TM) and draft:\n"
+            "• resources/glossary.draft.md (pre-filtered terminology)\n"
+            "• resources/lang-style.draft.md (observed tone & grammar patterns)\n"
+            "• resources/character-voices.draft.md (if speaker metadata is present)\n\n"
+            "Outputs are saved strictly to *.draft.md sibling files and will not overwrite real resource files.\n\n"
+            "Proceed with resource bootstrapping?",
+            parent=self.root,
+            icon="question"
+        )
+        if not confirm:
+            return
+
+        self._show_bootstrap_dialog(proj_dir)
+
+    def _show_bootstrap_dialog(self, proj_dir: Path):
+        dlg = tk.Toplevel(self.root)
+        dlg.title(f"⚡ Bootstrap Resources — {proj_dir.name}")
+        dlg.geometry("700x520")
+        dlg.minsize(550, 400)
+        dlg.configure(bg=BG_BASE)
+        dlg.transient(self.root)
+        dlg.grab_set()
+
+        hdr = tk.Label(
+            dlg,
+            text=f"AI Resource Bootstrapping: {proj_dir.name}",
+            font=FONT_TITLE,
+            bg=BG_BASE,
+            fg=ACCENT_INK,
+            padx=12,
+            pady=8,
+            anchor="w"
+        )
+        hdr.pack(fill=tk.X)
+
+        pbar = progress_bar(dlg, mode="indeterminate")
+        pbar.pack(fill=tk.X, padx=12, pady=(0, 6))
+        pbar.start(10)
+
+        txt_log = tk.Text(dlg, bg=BG_INSET, fg=FG_TEXT, font=FONT_MONO, bd=1, relief="solid")
+        txt_log.pack(fill=tk.BOTH, expand=True, padx=12, pady=6)
+
+        btn_box = ttk.Frame(dlg, style="Card.TFrame", padding=10)
+        btn_box.pack(fill=tk.X)
+
+        lbl_dlg_status = tk.Label(btn_box, text="Running bootstrap-resources...", font=FONT_BODY, bg=BG_SURFACE, fg=ACCENT_AMBER)
+        lbl_dlg_status.pack(side=tk.LEFT, padx=5)
+
+        btn_open = action_button(
+            btn_box, "📁 Open Resources Folder",
+            lambda: open_folder(proj_dir / "resources"),
+            state="disabled",
+            tooltip="Open resources/ folder to review draft files"
+        )
+        btn_open.pack(side=tk.RIGHT, padx=5)
+
+        btn_close = action_button(
+            btn_box, "Close",
+            dlg.destroy,
+            state="disabled"
+        )
+        btn_close.pack(side=tk.RIGHT, padx=5)
+
+        def run_thread():
+            cmd = [
+                sys.executable,
+                "-m", "locpipe.cli",
+                "bootstrap-resources",
+                "--project", str(proj_dir),
+                "--yes"
+            ]
+            try:
+                proc = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    bufsize=1,
+                    creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+                )
+                for line in proc.stdout:
+                    dlg.after(0, lambda l=line: (txt_log.insert(tk.END, l), txt_log.see(tk.END)))
+                proc.wait()
+
+                def on_done(code=proc.returncode):
+                    pbar.stop()
+                    pbar.pack_forget()
+                    btn_close.config(state="normal")
+                    btn_open.config(state="normal")
+                    if code == 0:
+                        lbl_dlg_status.config(text="✅ Bootstrap completed successfully!", fg=ACCENT_MOSS)
+                    else:
+                        lbl_dlg_status.config(text=f"❌ Bootstrap finished with exit code {code}", fg=ACCENT_PAPRIKA)
+
+                dlg.after(0, on_done)
+            except Exception as ex:
+                def on_err(err=str(ex)):
+                    pbar.stop()
+                    pbar.pack_forget()
+                    btn_close.config(state="normal")
+                    txt_log.insert(tk.END, f"\nError running bootstrap: {err}\n")
+                    lbl_dlg_status.config(text=f"❌ Error: {err}", fg=ACCENT_PAPRIKA)
+                dlg.after(0, on_err)
+
+        threading.Thread(target=run_thread, daemon=True).start()
 
     def _on_char_fallback_toggled(self):
         if self._suppress_dirty:
@@ -706,6 +932,7 @@ class ProjectsTab(ttk.Frame):
             for c in self.categories_list:
                 self._render_category_row(c)
 
+            self._detect_current_lang_style_preset()
             self.is_dirty = False
             self.lbl_status.config(text=f"Loaded {name}", fg=ACCENT_MOSS)
         finally:

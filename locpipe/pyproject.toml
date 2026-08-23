@@ -7,6 +7,15 @@ dependencies = [
     "pyyaml>=6.0",
     "jsonschema>=4.20",
     "polib>=1.2",
+    "anyio>=4.0",
+    "pyspellchecker>=0.8.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21.0",
+    "anyio>=4.0",
 ]
 
 [project.scripts]

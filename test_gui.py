@@ -449,3 +449,41 @@ def test_audit_tab_force_retranslate(tk_root, tmp_path):
         tm2.close()
 
 
+def test_projects_tab_lang_style_presets(tk_root, tmp_path):
+    from locpipe.presets import LANG_STYLE_PRESETS
+
+    p1 = tmp_path / "locpipe" / "projects" / "proj_preset_test"
+    p1.mkdir(parents=True)
+    res_dir = p1 / "resources"
+    res_dir.mkdir()
+    (p1 / "project.yaml").write_text("project: proj_preset_test\nsource_lang: en\ntarget_lang: hu\nformat: uabea_json\n", encoding="utf-8")
+
+    with patch("gamestringer.desktop_gui.tabs.projects_tab.get_default_projects_dir", return_value=tmp_path / "locpipe" / "projects"):
+        tab = ProjectsTab(tk.Frame(tk_root), tk_root)
+        tab.select_project("proj_preset_test")
+
+        # Select Modern preset
+        preset_name = "Modern, laza (kortárs akció/kaland)"
+        tab.var_lang_style_preset.set(preset_name)
+        tab._on_lang_style_preset_selected()
+
+        ls_file = res_dir / "lang-style.md"
+        assert ls_file.exists()
+        assert ls_file.read_text(encoding="utf-8") == LANG_STYLE_PRESETS[preset_name]
+
+        # Select Fantasy preset without confirmation (reject overwrite)
+        with patch("tkinter.messagebox.askyesno", return_value=False):
+            tab.var_lang_style_preset.set("Fantasy/archaikus (RPG, epikus fantasy)")
+            tab._on_lang_style_preset_selected()
+            # File should still have Modern preset
+            assert ls_file.read_text(encoding="utf-8") == LANG_STYLE_PRESETS[preset_name]
+            assert tab.var_lang_style_preset.get() == preset_name
+
+        # Select Fantasy preset with confirmation (accept overwrite)
+        with patch("tkinter.messagebox.askyesno", return_value=True):
+            tab.var_lang_style_preset.set("Fantasy/archaikus (RPG, epikus fantasy)")
+            tab._on_lang_style_preset_selected()
+            assert ls_file.read_text(encoding="utf-8") == LANG_STYLE_PRESETS["Fantasy/archaikus (RPG, epikus fantasy)"]
+
+
+
