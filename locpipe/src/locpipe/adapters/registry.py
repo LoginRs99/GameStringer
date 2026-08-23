@@ -84,6 +84,7 @@ _STATIC_REGISTRY: dict[str, FormatAdapter] = {
 _CONFIGURABLE_REGISTRY = {
     "unity": UnityCSVAdapter,
     "uabea_json": UABEAJsonAdapter,
+    "bayonetta_json": UABEAJsonAdapter,
 }
 
 

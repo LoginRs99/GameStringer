@@ -294,8 +294,22 @@ class UABEAJsonAdapter(FormatAdapter):
         entries: List[Entry] = []
         for idx, item in enumerate(data):
             if isinstance(item, dict):
-                src_val = item.get("source") or item.get("en") or item.get("text") or item.get("EN")
-                tgt_val = item.get("target") or item.get("hu") or item.get("HU") or ""
+                src_val = (
+                    item.get("source")
+                    or item.get("original_text")
+                    or item.get(self.source_col_name)
+                    or item.get("en")
+                    or item.get("text")
+                    or item.get("EN")
+                )
+                tgt_val = (
+                    item.get("target")
+                    or item.get("translated_text")
+                    or item.get(self.target_col_name)
+                    or item.get("hu")
+                    or item.get("HU")
+                    or ""
+                )
                 if src_val and isinstance(src_val, str):
                     if self._noise_filter_enabled:
                         reason = noise_reason(src_val)
@@ -305,7 +319,7 @@ class UABEAJsonAdapter(FormatAdapter):
                             continue
                     if audit_sink is not None:
                         audit_sink.append((f"[{idx}]", src_val, "kept"))
-                    row_id = item.get("id") or item.get("key") or f"idx_{idx}"
+                    row_id = item.get("internal_path") or item.get("id") or item.get("key") or f"idx_{idx}"
                     entry_key = f"{asset_name}:{row_id}:{idx}"
                     extra = {
                         "uabea_structure": "json_array",
@@ -370,8 +384,17 @@ class UABEAJsonAdapter(FormatAdapter):
                     if idx is not None and 0 <= idx < len(data):
                         item = data[idx]
                         if isinstance(item, dict):
-                            tgt_col = self.target_col_name
-                            item[tgt_col] = self._apply_replacements(e.target)
+                            if "translated_text" in item:
+                                item["translated_text"] = self._apply_replacements(e.target)
+                            elif self.target_col_name in item:
+                                item[self.target_col_name] = self._apply_replacements(e.target)
+                            elif "target" in item:
+                                item["target"] = self._apply_replacements(e.target)
+                            elif "hu" in item:
+                                item["hu"] = self._apply_replacements(e.target)
+                            else:
+                                tgt_col = self.target_col_name
+                                item[tgt_col] = self._apply_replacements(e.target)
 
         # Write reconstructed UABEA JSON back to disk
         out_content = json.dumps(data, indent=2, ensure_ascii=False)
