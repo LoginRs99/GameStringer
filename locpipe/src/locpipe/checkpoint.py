@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 import time
 from pathlib import Path
 from typing import Optional
@@ -57,25 +58,48 @@ def fingerprint_batches(batches) -> str:
 class Checkpoint:
     def __init__(self, path: Path):
         self.path = path
+        self._lock = threading.Lock()
         self.data = self._load()
 
     def _load(self) -> dict:
         if self.path.exists():
             try:
                 data = json.loads(self.path.read_text(encoding="utf-8"))
-                if isinstance(data, dict):
-                    data.setdefault("completed_files", [])
-                    return data
-            except Exception:
-                pass
+            except Exception as e:
+                # Do NOT silently fall back to a fresh/empty checkpoint here.
+                # In batch mode this file is the only record of pending_job --
+                # losing it on a parse error means a resume can't reattach to
+                # an in-flight batch and will submit a brand new one, which
+                # per the module docstring above is a non-idempotent, billable
+                # duplicate. Fail loudly and make the user decide.
+                raise RuntimeError(
+                    f"Checkpoint file {self.path} exists but is not valid JSON ({e}). "
+                    "Refusing to auto-reset it, since it may reference a pending "
+                    "batch job -- resubmitting that job would be a duplicate, "
+                    "billable API call. Inspect/repair the file by hand, check "
+                    "the provider dashboard for an in-flight job first, or "
+                    "delete the file yourself once you've confirmed it's safe "
+                    "to start fresh."
+                ) from e
+            if isinstance(data, dict):
+                data.setdefault("completed_files", [])
+                return data
         return {"completed_batches": [], "pending_job": None, "last_updated": None, "completed_files": []}
 
     def _save(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.data["last_updated"] = time.time()
-        tmp_path = self.path.with_suffix(".tmp")
-        tmp_path.write_text(json.dumps(self.data, indent=2), encoding="utf-8")
-        tmp_path.replace(self.path)
+        with self._lock:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.data["last_updated"] = time.time()
+            tmp_path = self.path.with_suffix(f".tmp.{threading.get_ident()}")
+            try:
+                tmp_path.write_text(json.dumps(self.data, indent=2), encoding="utf-8")
+                tmp_path.replace(self.path)
+            finally:
+                if tmp_path.exists():
+                    try:
+                        tmp_path.unlink()
+                    except OSError:
+                        pass
 
     def mark_batch_done(self, category: str, entry_count: int) -> None:
         self.data["completed_batches"].append(

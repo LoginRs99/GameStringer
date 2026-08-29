@@ -135,3 +135,36 @@ provider:
     # Must succeed on retry 2
     assert provider.call_count == 2
     assert stats.total_entries == 1
+
+
+def test_checkpoint_corrupt_json_raises_runtime_error(tmp_path: Path) -> None:
+    cp_path = tmp_path / "checkpoint.json"
+    cp_path.write_text("{corrupt: json truncated", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="is not valid JSON"):
+        Checkpoint(cp_path)
+
+
+def test_unity_validator_missing_format_kwargs_raises(tmp_path: Path) -> None:
+    from locpipe.validators.registry import run_validator
+
+    csv_file = tmp_path / "sample.csv"
+    csv_file.write_text("ID,EN,HU\n1,Hello,\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="format 'unity' requires"):
+        run_validator("unity", csv_file, format_kwargs={})
+
+
+def test_checkpoint_concurrent_saves(tmp_path: Path) -> None:
+    import concurrent.futures
+
+    cp = Checkpoint(tmp_path / "checkpoint.json")
+    def worker(i: int):
+        cp.save_batch_drafts({f"key_{i}_{j}": f"trans_{i}_{j}" for j in range(20)})
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        futures = [executor.submit(worker, i) for i in range(10)]
+        for f in concurrent.futures.as_completed(futures):
+            f.result()
+
+    loaded = Checkpoint(tmp_path / "checkpoint.json")
+    drafts = loaded.get_batch_drafts()
+    assert len(drafts) == 200

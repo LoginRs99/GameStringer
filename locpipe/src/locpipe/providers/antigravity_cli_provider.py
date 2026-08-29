@@ -55,14 +55,41 @@ import asyncio
 import json
 import logging
 import os
+from pathlib import Path
 import shutil
+import stat
 import subprocess
 import tempfile
 import time
+from typing import Optional
 
 from .base import TranslationProvider
 
 logger = logging.getLogger(__name__)
+
+
+def _cleanup_antigravity_session(temp_prompt_path: str) -> None:
+    """Removes the temporary conversation directory created in ~/.gemini/antigravity-cli/brain/
+    by Antigravity CLI for this batch chunk prompt, keeping the session list clean."""
+    try:
+        brain_dir = Path.home() / ".gemini" / "antigravity-cli" / "brain"
+        if not brain_dir.is_dir():
+            return
+        temp_name = Path(temp_prompt_path).name
+        for session_dir in brain_dir.iterdir():
+            if not session_dir.is_dir():
+                continue
+            transcript = session_dir / ".system_generated" / "logs" / "transcript.jsonl"
+            if transcript.exists():
+                try:
+                    with open(transcript, "r", encoding="utf-8", errors="ignore") as f:
+                        first_line = f.readline()
+                        if temp_name in first_line:
+                            shutil.rmtree(session_dir, ignore_errors=True)
+                except Exception:
+                    pass
+    except Exception:
+        pass
 
 _BINARY = (
     shutil.which("agy")
@@ -118,6 +145,15 @@ class AntigravityCLIProvider(TranslationProvider):
         with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as temp_file:
             temp_file.write(full_prompt)
             temp_prompt_path = temp_file.name
+        # Belt-and-suspenders: NamedTemporaryFile already creates with 0600 on
+        # POSIX, but this content is unreleased translation/lore text, so make
+        # the owner-only restriction explicit rather than relying on the
+        # default. No-op in effect on Windows (no POSIX mode bits), harmless
+        # to call there.
+        try:
+            os.chmod(temp_prompt_path, stat.S_IRUSR | stat.S_IWUSR)
+        except OSError:
+            pass
 
         effective_effort = effort or self.effort
         args = [
@@ -125,6 +161,17 @@ class AntigravityCLIProvider(TranslationProvider):
             "--print",
             temp_prompt_path,
             "--model", self.model,
+            # Required, not optional, in headless --print mode: agy's own
+            # headless mode ignores permissions.allow from settings.json
+            # entirely, so without this flag any tool-call prompt has nowhere
+            # to render in a non-TTY subprocess and the process hangs until
+            # timeout_s instead of failing or succeeding
+            # (google-antigravity/antigravity-cli#548). Per agy's docs this
+            # auto-approves ALL tool calls including file writes and command
+            # execution, not just "answer with text" -- safe here only
+            # because complete() always sends a closed translation prompt
+            # that never asks the model to use a tool, but that safety
+            # property lives in prompt_builder.py, not in this flag.
             "--dangerously-skip-permissions",
         ]
 
@@ -221,6 +268,7 @@ class AntigravityCLIProvider(TranslationProvider):
                     os.unlink(temp_prompt_path)
                 except Exception:
                     pass
+            _cleanup_antigravity_session(temp_prompt_path)
 
     async def complete(
         self,

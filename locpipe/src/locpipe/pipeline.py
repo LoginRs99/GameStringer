@@ -185,7 +185,7 @@ async def _translate_batches_sync(batches, config, glossary, provider: Translati
                     rep.status = EntryStatus.MT_DRAFT
                     rep.origin = "mt"
                     drafts[rep.tm_key] = rep.target
-                checkpoint.save_batch_drafts(drafts)
+                await asyncio.to_thread(checkpoint.save_batch_drafts, drafts)
                 return batch
             last_error = error
             user_payload += f"\n\n(Your previous response was invalid: {error}. Return ONLY the JSON array.)"

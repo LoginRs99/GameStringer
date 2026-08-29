@@ -103,6 +103,12 @@ def run_validator(
         script = _VALIDATORS_DIR / _SUBPROCESS_SCRIPT[format_name]
         argv = [str(path)]
         if format_name == "unity":
+            missing = [k for k in ("source_col", "target_col") if k not in format_kwargs]
+            if missing:
+                raise ValueError(
+                    f"format 'unity' requires {missing} in project.yaml's "
+                    f"format_kwargs, but {'it is' if len(missing) == 1 else 'they are'} missing"
+                )
             argv += ["--source", format_kwargs["source_col"], "--target", format_kwargs["target_col"]]
         if glossary_path:
             argv += ["--glossary", str(glossary_path)]
