@@ -463,8 +463,13 @@ class ProjectsTab(ttk.Frame):
         ).pack(side=tk.LEFT, padx=(0, 10))
 
         action_button(
-            r_lp, "⚡ Bootstrap Resources (from TM)", self._on_bootstrap_resources,
+            r_lp, "✨ Auto-Discover Resources (AI)", self._on_auto_discover_resources,
             style="Primary.TButton",
+            tooltip="Use a lightweight LLM call to analyze extracted batch strings and auto-discover the best style preset, starter glossary, and character voices"
+        ).pack(side=tk.LEFT, padx=(0, 10))
+
+        action_button(
+            r_lp, "⚡ Bootstrap (from TM)", self._on_bootstrap_resources,
             tooltip="AI-draft glossary, style guide, and character voice bible from existing Translation Memory (TM)"
         ).pack(side=tk.LEFT)
 
@@ -622,6 +627,124 @@ class ProjectsTab(ttk.Frame):
         res_dir = self.current_project_path / "resources"
         res_dir.mkdir(parents=True, exist_ok=True)
         open_folder(res_dir)
+
+    def _on_auto_discover_resources(self):
+        if not self.current_project_path:
+            messagebox.showwarning("No Project", "Please select a project first.", parent=self.root)
+            return
+
+        proj_dir = self.current_project_path
+        confirm = messagebox.askyesno(
+            "Auto-Discover Resources (AI)",
+            f"Launch AI Resource Auto-Discovery for '{proj_dir.name}'?\n\n"
+            "This will use a single fast, low-cost LLM call to:\n"
+            "• Analyze batch strings and match the best Hungarian Style Preset\n"
+            "• Detect proper nouns and key terminology for resources/glossary.md\n"
+            "• Detect characters and dialogue tone for resources/character-voices.md\n\n"
+            "Proceed?",
+            parent=self.root,
+            icon="question"
+        )
+        if not confirm:
+            return
+
+        self._show_auto_discover_dialog(proj_dir)
+
+    def _show_auto_discover_dialog(self, proj_dir: Path):
+        dlg = tk.Toplevel(self.root)
+        dlg.title(f"✨ Auto-Discover Resources — {proj_dir.name}")
+        dlg.geometry("700x520")
+        dlg.minsize(550, 400)
+        dlg.configure(bg=BG_BASE)
+        dlg.transient(self.root)
+        dlg.grab_set()
+
+        hdr = tk.Label(
+            dlg,
+            text=f"AI Resource & Style Auto-Discovery: {proj_dir.name}",
+            font=FONT_TITLE,
+            bg=BG_BASE,
+            fg=ACCENT_INK,
+            padx=12,
+            pady=8,
+            anchor="w"
+        )
+        hdr.pack(fill=tk.X)
+
+        pbar = progress_bar(dlg, mode="indeterminate")
+        pbar.pack(fill=tk.X, padx=12, pady=(0, 6))
+        pbar.start(10)
+
+        txt_log = tk.Text(dlg, bg=BG_INSET, fg=FG_TEXT, font=FONT_MONO, bd=1, relief="solid")
+        txt_log.pack(fill=tk.BOTH, expand=True, padx=12, pady=6)
+
+        btn_box = ttk.Frame(dlg, style="Card.TFrame", padding=10)
+        btn_box.pack(fill=tk.X)
+
+        lbl_dlg_status = tk.Label(btn_box, text="Analyzing batch files with AI...", font=FONT_BODY, bg=BG_SURFACE, fg=ACCENT_AMBER)
+        lbl_dlg_status.pack(side=tk.LEFT, padx=5)
+
+        btn_open = action_button(
+            btn_box, "📁 Open Resources Folder",
+            lambda: open_folder(proj_dir / "resources"),
+            state="disabled",
+            tooltip="Open resources/ folder to review generated files"
+        )
+        btn_open.pack(side=tk.RIGHT, padx=5)
+
+        btn_close = action_button(
+            btn_box, "Close",
+            dlg.destroy,
+            state="disabled"
+        )
+        btn_close.pack(side=tk.RIGHT, padx=5)
+
+        def run_thread():
+            cmd = [
+                sys.executable,
+                "-m", "locpipe.cli",
+                "audit",
+                "--project", str(proj_dir),
+                "--suggest",
+                "--apply"
+            ]
+            try:
+                proc = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    bufsize=1,
+                    creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+                )
+                for line in proc.stdout:
+                    dlg.after(0, lambda l=line: (txt_log.insert(tk.END, l), txt_log.see(tk.END)))
+                proc.wait()
+
+                def on_done(code=proc.returncode):
+                    pbar.stop()
+                    pbar.pack_forget()
+                    btn_close.config(state="normal")
+                    btn_open.config(state="normal")
+                    if code == 0:
+                        lbl_dlg_status.config(text="✅ Auto-discovery completed & resources applied!", fg=ACCENT_MOSS)
+                        self._detect_current_lang_style_preset()
+                    else:
+                        lbl_dlg_status.config(text=f"❌ Auto-discovery finished with exit code {code}", fg=ACCENT_PAPRIKA)
+
+                dlg.after(0, on_done)
+            except Exception as ex:
+                def on_err(err=str(ex)):
+                    pbar.stop()
+                    pbar.pack_forget()
+                    btn_close.config(state="normal")
+                    txt_log.insert(tk.END, f"\nError running auto-discovery: {err}\n")
+                    lbl_dlg_status.config(text=f"❌ Error: {err}", fg=ACCENT_PAPRIKA)
+                dlg.after(0, on_err)
+
+        threading.Thread(target=run_thread, daemon=True).start()
 
     def _on_bootstrap_resources(self):
         if not self.current_project_path:
