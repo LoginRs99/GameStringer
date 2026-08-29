@@ -71,7 +71,7 @@ class UABEAJsonAdapter(FormatAdapter):
         # this is the escape hatch for whatever the built-in heuristic
         # doesn't (and, being deliberately conservative, can't) catch. See
         # `locpipe audit` for building this list from real extraction output.
-        self._exclude_patterns = [re.compile(p) for p in self.options.get("uabea_json_path_exclude", [])]
+        self._exclude_patterns = [re.compile(p) for p in (self.options.get("uabea_json_path_exclude") or [])]
 
     def extract(self, path: Path, audit_sink: Optional[list] = None) -> List[Entry]:
         content = path.read_text(encoding="utf-8", errors="ignore")
@@ -90,7 +90,7 @@ class UABEAJsonAdapter(FormatAdapter):
 
         # Case 2: MonoBehaviour Typetree or Key-Value Dictionary
         elif isinstance(data, dict):
-            asset_name = data.get("m_Name", path.stem)
+            asset_name = data.get("m_Name") or path.stem
             entries.extend(self._extract_typetree_dict(path, asset_name, data, audit_sink=audit_sink))
 
         # Case 3: JSON Array of objects
@@ -226,7 +226,12 @@ class UABEAJsonAdapter(FormatAdapter):
                         record_excluded_subtree(v, full_path)
             elif isinstance(obj, list):
                 for idx, item in enumerate(obj):
-                    record_excluded_subtree(item, path_stack + [str(idx)])
+                    if isinstance(item, str) and item.strip():
+                        audit_sink.append((".".join(path_stack + [str(idx)]), item, "excluded_by_config"))
+                    elif isinstance(item, (dict, list)):
+                        record_excluded_subtree(item, path_stack + [str(idx)])
+            elif isinstance(obj, str) and obj.strip():
+                audit_sink.append((".".join(path_stack), obj, "excluded_by_config"))
 
         def walk(obj: Any, path_stack: List[str]):
             if isinstance(obj, dict):
@@ -283,7 +288,43 @@ class UABEAJsonAdapter(FormatAdapter):
                         walk(v, full_path)
             elif isinstance(obj, list):
                 for idx, item in enumerate(obj):
-                    walk(item, path_stack + [str(idx)])
+                    full_path = path_stack + [str(idx)]
+                    full_path_str = ".".join(full_path)
+                    if self._exclude_patterns and any(p.search(full_path_str) for p in self._exclude_patterns):
+                        if audit_sink is not None:
+                            if isinstance(item, str) and item.strip():
+                                audit_sink.append((full_path_str, item, "excluded_by_config"))
+                            elif isinstance(item, (dict, list)):
+                                record_excluded_subtree(item, full_path)
+                        continue
+                    if isinstance(item, str) and len(item.strip()) > 0:
+                        reason = noise_reason(item) if self._noise_filter_enabled else None
+                        if reason is not None:
+                            if audit_sink is not None:
+                                audit_sink.append((full_path_str, item, f"noise:{reason}"))
+                            continue
+                        if audit_sink is not None:
+                            audit_sink.append((full_path_str, item, "kept"))
+
+                        entry_key = f"{asset_name}:" + full_path_str
+                        extra = {
+                            "uabea_structure": "json_typetree",
+                            "json_path": full_path,
+                        }
+                        entries.append(
+                            Entry(
+                                file=str(path),
+                                key=entry_key,
+                                source=item,
+                                target="",
+                                max_length=None,
+                                namespace=asset_name,
+                                notes=[f"path:{full_path_str}"],
+                                extra=extra,
+                            )
+                        )
+                    elif isinstance(item, (dict, list)):
+                        walk(item, full_path)
 
         walk(data, [])
         return entries
