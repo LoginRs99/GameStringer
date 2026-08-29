@@ -44,6 +44,16 @@ LANG_STYLE_PRESETS: dict[str, str] = {
         "Magyar idiómák és szófordulatok becsempészése megengedett, ha megőrzi az eredeti komikus szándékot. "
         "Ha egy szó szerinti fordítás elveszítené a poént, inkább lokalizálj egy hasonló magyar fordulattal, mint hogy szó szerint fordíts.\n"
     ),
+    "Érzelmes / Életszagú (narratív / slice-of-life)": (
+        "# Language style guide\n\n"
+        "## Tone\n"
+        "Mélyen emberi, meghitt, természetes és életszerű hétköznapi stílus (slice-of-life). "
+        "Kerüld a merev, rideg hivatalosságot, de a túlzó, modoros szlenget is — a hangsúly a hiteles érzelmeken és a természetes beszélt nyelven van.\n\n"
+        "## Loanwords\n"
+        "Természetes, modern hétköznapi magyar szóhasználat. Idegen kifejezések csak ott maradjanak, ahol a mai beszélt nyelvben is teljesen megszokottak.\n\n"
+        "## Punctuation & rhythm\n"
+        "Természetes élőbeszéd ritmusa. Rövidebb, gördülékeny mondatok, emberi párbeszédek.\n"
+    ),
 }
 
 DEFAULT_LANG_STYLE_HEADER = "# Language style guide\n"

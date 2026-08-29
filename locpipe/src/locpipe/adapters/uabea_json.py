@@ -82,21 +82,149 @@ class UABEAJsonAdapter(FormatAdapter):
 
         entries: List[Entry] = []
 
-        # Case 1: CSV inside m_Script (Primary Children of Morta UABEA structure)
-        if isinstance(data, dict) and "m_Script" in data and isinstance(data["m_Script"], str):
-            asset_name = data.get("m_Name", path.stem)
+        # Case 1: Unity I2 Localization LanguageSource
+        if self._is_i2_languagesource(data):
+            asset_name = data.get("m_Name") or path.stem
+            entries.extend(self._extract_i2_language_source(path, asset_name, data, audit_sink=audit_sink))
+
+        # Case 2: CSV inside m_Script (Primary Children of Morta UABEA structure)
+        elif isinstance(data, dict) and "m_Script" in data and isinstance(data["m_Script"], str):
+            asset_name = data.get("m_Name") or path.stem
             script_text = data["m_Script"]
             entries.extend(self._extract_csv_m_script(path, asset_name, script_text))
 
-        # Case 2: MonoBehaviour Typetree or Key-Value Dictionary
+        # Case 3: MonoBehaviour Typetree or Key-Value Dictionary
         elif isinstance(data, dict):
             asset_name = data.get("m_Name") or path.stem
             entries.extend(self._extract_typetree_dict(path, asset_name, data, audit_sink=audit_sink))
 
-        # Case 3: JSON Array of objects
+        # Case 4: JSON Array of objects
         elif isinstance(data, list):
             asset_name = path.stem
             entries.extend(self._extract_json_array(path, asset_name, data, audit_sink=audit_sink))
+
+        return entries
+
+    def _is_i2_languagesource(self, data: Any) -> bool:
+        return (
+            isinstance(data, dict)
+            and isinstance(data.get("mTerms"), dict)
+            and isinstance(data.get("mLanguages"), dict)
+            and "Array" in data["mTerms"]
+            and "Array" in data["mLanguages"]
+            and isinstance(data["mTerms"]["Array"], list)
+            and isinstance(data["mLanguages"]["Array"], list)
+        )
+
+    def _extract_i2_language_source(
+        self, path: Path, asset_name: str, data: dict, audit_sink: Optional[list] = None
+    ) -> List[Entry]:
+        entries: List[Entry] = []
+        languages = data.get("mLanguages", {}).get("Array", [])
+        mterms = data.get("mTerms", {}).get("Array", [])
+
+        # Find source language column index
+        source_idx = 0
+        src_col_upper = self.source_col_name.upper()
+        for idx, lang in enumerate(languages):
+            if isinstance(lang, dict):
+                code = str(lang.get("Code", "")).upper()
+                name = str(lang.get("Name", "")).upper()
+                if (
+                    code == src_col_upper
+                    or name == src_col_upper
+                    or (src_col_upper in ("EN", "ENGLISH") and (code == "EN" or name == "ENGLISH"))
+                ):
+                    source_idx = idx
+                    break
+
+        # Find target language column index if present
+        target_idx = source_idx  # default to overwriting source language if target slot doesn't exist
+        tgt_col_upper = self.target_col_name.upper()
+        for idx, lang in enumerate(languages):
+            if isinstance(lang, dict):
+                code = str(lang.get("Code", "")).upper()
+                name = str(lang.get("Name", "")).upper()
+                if (
+                    code == tgt_col_upper
+                    or name == tgt_col_upper
+                    or (tgt_col_upper in ("HU", "HUNGARIAN") and (code == "HU" or name == "HUNGARIAN"))
+                ):
+                    target_idx = idx
+                    break
+
+        for idx, term in enumerate(mterms):
+            if not isinstance(term, dict):
+                continue
+            term_name = term.get("Term", f"term_{idx}")
+            term_type = term.get("TermType", 0)
+            desc = term.get("Description", "")
+
+            # Filter non-text asset terms (1=Font, 2=Texture, 3=Audio, 4=GameObject, 5=Sprite/UnityObject, 6=Material)
+            if term_type != 0:
+                if audit_sink is not None:
+                    audit_sink.append((f"mTerms.{term_name}", f"TermType={term_type}", "noise:i2-non-text-asset"))
+                continue
+
+            # Filter internal language codes/metadata keys
+            if term_name == "language/code" or term_name.endswith("/code"):
+                if audit_sink is not None:
+                    audit_sink.append((f"mTerms.{term_name}", "code", "noise:i2-language-code"))
+                continue
+
+            # Check project-specific exclude patterns against term name / path
+            full_path_str = f"mTerms.Array.{idx}.Languages.Array.{source_idx}"
+            if self._exclude_patterns and any(
+                p.search(full_path_str) or p.search(term_name) for p in self._exclude_patterns
+            ):
+                if audit_sink is not None:
+                    audit_sink.append((full_path_str, term_name, "excluded_by_config"))
+                continue
+
+            lang_array = term.get("Languages", {}).get("Array", [])
+            if not isinstance(lang_array, list) or source_idx >= len(lang_array):
+                continue
+
+            src_val = lang_array[source_idx]
+            if not isinstance(src_val, str) or len(src_val.strip()) == 0:
+                continue
+
+            if self._noise_filter_enabled:
+                reason = noise_reason(src_val)
+                if reason is not None:
+                    if audit_sink is not None:
+                        audit_sink.append((full_path_str, src_val, f"noise:{reason}"))
+                    continue
+
+            if audit_sink is not None:
+                audit_sink.append((full_path_str, src_val, "kept"))
+
+            notes: List[str] = []
+            if desc and str(desc).strip():
+                notes.append(f"desc:{str(desc).strip()}")
+            if term_name:
+                notes.append(f"term:{term_name}")
+
+            entry_key = f"{asset_name}:{term_name}" if term_name else f"{asset_name}:term_{idx}"
+            extra = {
+                "uabea_structure": "i2_languagesource",
+                "term_index": idx,
+                "term_name": term_name,
+                "source_idx": source_idx,
+                "target_idx": target_idx,
+            }
+
+            entries.append(
+                Entry(
+                    file=str(path),
+                    key=entry_key,
+                    source=src_val,
+                    target="",
+                    namespace=asset_name,
+                    notes=notes,
+                    extra=extra,
+                )
+            )
 
         return entries
 
@@ -404,12 +532,16 @@ class UABEAJsonAdapter(FormatAdapter):
 
         key_map = {e.key: e for e in entries}
 
-        # Case 1: CSV inside m_Script
-        if isinstance(data, dict) and "m_Script" in data and isinstance(data["m_Script"], str):
+        # Case 1: Unity I2 Localization LanguageSource
+        if self._is_i2_languagesource(data):
+            self._merge_i2_language_source(data, entries)
+
+        # Case 2: CSV inside m_Script
+        elif isinstance(data, dict) and "m_Script" in data and isinstance(data["m_Script"], str):
             script_text = data["m_Script"]
             data["m_Script"] = self._merge_csv_m_script(script_text, entries, key_map)
 
-        # Case 2: MonoBehaviour Typetree
+        # Case 3: MonoBehaviour Typetree
         elif isinstance(data, dict):
             for e in entries:
                 if e.extra.get("uabea_structure") == "json_typetree" and e.target:
@@ -440,6 +572,21 @@ class UABEAJsonAdapter(FormatAdapter):
         # Write reconstructed UABEA JSON back to disk
         out_content = json.dumps(data, indent=2, ensure_ascii=False)
         path.write_text(out_content, encoding="utf-8")
+
+    def _merge_i2_language_source(self, data: dict, entries: List[Entry]) -> None:
+        mterms = data.get("mTerms", {}).get("Array", [])
+        for e in entries:
+            if not e.target or e.extra.get("uabea_structure") != "i2_languagesource":
+                continue
+            idx = e.extra.get("term_index")
+            target_idx = e.extra.get("target_idx", 0)
+            if idx is not None and 0 <= idx < len(mterms):
+                term = mterms[idx]
+                if isinstance(term, dict):
+                    lang_array = term.setdefault("Languages", {}).setdefault("Array", [])
+                    while len(lang_array) <= target_idx:
+                        lang_array.append("")
+                    lang_array[target_idx] = self._apply_replacements(e.target)
 
     def _merge_csv_m_script(self, script_text: str, entries: List[Entry], key_map: Dict[str, Entry]) -> str:
         lines = script_text.splitlines()

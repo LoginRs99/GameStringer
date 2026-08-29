@@ -29,6 +29,9 @@ _BOOLEAN_RE = re.compile(r"^(true|false)$", re.IGNORECASE)
 _DOTTED_TYPE_RE = re.compile(r"^[A-Za-z_]\w*(\.[A-Za-z_]\w*){1,}$")
 _ALL_CAPS_CONST_RE = re.compile(r"^[A-Z][A-Z0-9]*(_[A-Z0-9]+)+$")
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_FONT_ID_RE = re.compile(r"^font_[a-z0-9_]+$", re.IGNORECASE)
+_ASSET_PATH_RE = re.compile(r"^(loc/|assets/|textures/|sprites/|fonts/|ui/)?(img_|tex_|sprite_|font_|atlas_|mat_|anim_|icon_)[a-z0-9_/-]+$", re.IGNORECASE)
+
 
 # Common Unity/UABEA asset file extensions -- a bare filename or a path
 # ending in one of these is an asset reference, not narrative/UI text.
@@ -88,6 +91,10 @@ def noise_reason(value: str) -> Optional[str]:
     if " " not in text:
         if lower in _SHORT_UI_WORD_ALLOWLIST:
             return None
+        if _FONT_ID_RE.match(text):
+            return "font-identifier"
+        if _ASSET_PATH_RE.match(text):
+            return "asset-path"
         if _ALL_CAPS_CONST_RE.match(text):
             return "enum-constant"  # e.g. GAME_STATE_PAUSED
         if "_" in text and any(ch.isdigit() for ch in text):

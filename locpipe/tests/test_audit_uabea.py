@@ -165,3 +165,23 @@ def test_audit_unsupported_format_is_graceful(tmp_path: Path) -> None:
     assert rc == 0
     content = (dest / "audit_report.md").read_text(encoding="utf-8")
     assert "doesn't support extraction auditing yet" in content
+
+
+def test_presets_includes_emotional_slice_of_life():
+    from locpipe.presets import LANG_STYLE_PRESETS
+
+    assert "Érzelmes / Életszagú (narratív / slice-of-life)" in LANG_STYLE_PRESETS
+    preset = LANG_STYLE_PRESETS["Érzelmes / Életszagú (narratív / slice-of-life)"]
+    assert "slice-of-life" in preset
+    assert "hiteles érzelmeken" in preset
+
+
+def test_audit_with_suggest_mock_provider(tmp_path: Path, capsys) -> None:
+    proj = _setup_uabea_project(tmp_path)
+    rc = main(["audit", "--project", str(proj), "--suggest", "--dry-run", "--apply"])
+    assert rc == 0
+
+    captured = capsys.readouterr()
+    assert "AI RESOURCE & STYLE AUTO-DISCOVERY" in captured.out
+    assert (proj / "resources" / "lang-style.md").exists()
+

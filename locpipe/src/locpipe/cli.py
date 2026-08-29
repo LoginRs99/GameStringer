@@ -191,6 +191,10 @@ def cmd_plan(args: argparse.Namespace) -> int:
 
 
 def cmd_audit(args: argparse.Namespace) -> int:
+    import asyncio
+    from .auto_suggest import analyze_project_and_suggest
+    from .providers.mock import MockProvider
+
     config = load_project(args.project)
     report = run_audit(config)
     markdown = render_report_markdown(report, config.project)
@@ -213,6 +217,72 @@ def cmd_audit(args: argparse.Namespace) -> int:
     if report["files_failed"]:
         print(f"  files that failed to parse (skipped):   {len(report['files_failed'])}")
     print(f"Full breakdown by asset/path: {out_path}")
+
+    if getattr(args, "suggest", False):
+        print("\n=== AI RESOURCE & STYLE AUTO-DISCOVERY ===")
+        print(f"Analyzing extracted strings with {config.provider.name} (low effort)...")
+        provider = (
+            MockProvider()
+            if getattr(args, "dry_run", False)
+            else _build_provider(config, effort_override="low")
+        )
+        try:
+            sugg = asyncio.run(analyze_project_and_suggest(config, provider))
+            print(f"\n  Recommended Preset:  {sugg.recommended_preset}")
+            if sugg.preset_rationale:
+                print(f"  Rationale:           {sugg.preset_rationale}")
+
+            if sugg.glossary_items:
+                print(f"\n  Discovered Glossary Candidates ({len(sugg.glossary_items)}):")
+                for g in sugg.glossary_items[:6]:
+                    print(f"    • {g.get('source')} -> {g.get('target')} ({g.get('category', 'UI')})")
+
+            if sugg.character_voices:
+                print(f"\n  Discovered Characters ({len(sugg.character_voices)}):")
+                for cv in sugg.character_voices[:4]:
+                    print(f"    • {cv.get('character')} ({cv.get('register', 'informal')}): {cv.get('traits')}")
+
+            if getattr(args, "apply", False):
+                # Apply suggested preset to lang-style.md
+                ls_path = config.resources.get("lang_style") or (config.root / "resources" / "lang-style.md")
+                ls_path.parent.mkdir(parents=True, exist_ok=True)
+                ls_path.write_text(sugg.style_guide_content, encoding="utf-8")
+                print(f"\n  [APPLIED] Written '{sugg.recommended_preset}' preset to {ls_path}")
+
+                # Apply glossary if provided
+                if sugg.glossary_items:
+                    g_path = config.resources.get("glossary") or (config.root / "resources" / "glossary.md")
+                    g_lines = [
+                        "# Glossary\n\n| Source term | Target translation | Category | Confidence | Source/justification |\n|---|---|---|---|---|"
+                    ]
+                    for g in sugg.glossary_items:
+                        src = g.get("source", "").replace("|", "")
+                        tgt = g.get("target", "").replace("|", "")
+                        cat = g.get("category", "General").replace("|", "")
+                        note = g.get("note", "Auto-discovered").replace("|", "")
+                        g_lines.append(f"| {src} | {tgt} | {cat} | 0.90 | {note} |")
+                    g_path.write_text("\n".join(g_lines) + "\n", encoding="utf-8")
+                    print(f"  [APPLIED] Written {len(sugg.glossary_items)} terms to {g_path}")
+
+                # Apply character voices if provided
+                if sugg.character_voices:
+                    cv_path = config.resources.get("character_voices") or (config.root / "resources" / "character-voices.md")
+                    cv_lines = [
+                        "# Character voice bible\n\n| Character | Register | Traits | Avoid |\n|---|---|---|---|"
+                    ]
+                    for cv in sugg.character_voices:
+                        ch = cv.get("character", "").replace("|", "")
+                        reg = cv.get("register", "informal").replace("|", "")
+                        traits = cv.get("traits", "").replace("|", "")
+                        cv_lines.append(f"| {ch} | {reg} | {traits} | Out-of-character tone |")
+                    cv_path.write_text("\n".join(cv_lines) + "\n", encoding="utf-8")
+                    print(f"  [APPLIED] Written {len(sugg.character_voices)} characters to {cv_path}")
+            else:
+                print("\nTip: Run with `locpipe audit --suggest --apply` to automatically write these resources.")
+            print("==========================================")
+        except Exception as e:
+            print(f"Auto-discovery failed: {e}")
+
     return 0
 
 
@@ -578,10 +648,13 @@ def main(argv: list[str] | None = None) -> int:
 
     p_audit = sub.add_parser(
         "audit",
-        help="read-only: report what extraction would keep vs. filter as engine noise (uabea_json only, for now), no LLM calls, no writes",
+        help="report what extraction would keep vs. filter as engine noise, and optionally auto-discover presets/glossary with --suggest",
     )
     p_audit.add_argument("--project", required=True, help="path to the project directory")
     p_audit.add_argument("--out", default=None, help="report path (default: <project>/audit_report.md)")
+    p_audit.add_argument("--suggest", action="store_true", help="use a lightweight LLM call to auto-discover style presets, glossary candidates, and character voices")
+    p_audit.add_argument("--apply", action="store_true", help="apply suggested preset and resources directly to resources/lang-style.md, glossary.md, character-voices.md")
+    p_audit.add_argument("--dry-run", action="store_true", help="use mock provider, no API calls")
     p_audit.set_defaults(func=cmd_audit)
 
     p_verify = sub.add_parser(

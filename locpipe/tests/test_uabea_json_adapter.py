@@ -244,3 +244,63 @@ def test_typetree_audit_sink_records_kept_and_dropped_with_reasons():
         assert by_action[("entries.internal_metadata.sprite_ref", "icons/dodge_icon.png")] == "noise:asset-reference"
         assert by_action[("entries.state_flags.combat_state", "GAME_STATE_PAUSED")] == "noise:enum-constant"
         assert by_action[("entries.state_flags.node_id", "weight_001")] == "noise:indexed-identifier"
+
+
+def test_i2_languagesource_extraction_and_merge():
+    i2_sample = {
+        "m_Name": "LanguageSource",
+        "mLanguages": {
+            "Array": [
+                {"Name": "English", "Code": "en"},
+                {"Name": "French", "Code": "fr"},
+            ]
+        },
+        "mTerms": {
+            "Array": [
+                {
+                    "Term": "general/about",
+                    "TermType": 0,
+                    "Description": "About the game",
+                    "Languages": {"Array": ["About", "À propos"]},
+                },
+                {
+                    "Term": "fonts/main",
+                    "TermType": 1,
+                    "Description": "Font asset",
+                    "Languages": {"Array": ["font_roboto", "font_roboto"]},
+                },
+                {
+                    "Term": "language/code",
+                    "TermType": 0,
+                    "Description": "",
+                    "Languages": {"Array": ["en", "fr"]},
+                },
+            ]
+        },
+    }
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        file_path = Path(tmp_dir) / "LanguageSource.json"
+        file_path.write_text(json.dumps(i2_sample), encoding="utf-8")
+
+        adapter = UABEAJsonAdapter({"source_column": "EN", "target_column": "HU"})
+        sink: list = []
+        entries = adapter.extract(file_path, audit_sink=sink)
+
+        # Only the real text term should be extracted, fonts and language codes are filtered
+        assert len(entries) == 1
+        entry = entries[0]
+        assert entry.source == "About"
+        assert entry.key == "LanguageSource:general/about"
+        assert "desc:About the game" in entry.notes
+        assert entry.extra["uabea_structure"] == "i2_languagesource"
+
+        # Test merge
+        entry.target = "Névjegy"
+        adapter.merge(file_path, [entry])
+
+        merged_data = json.loads(file_path.read_text(encoding="utf-8"))
+        # English slot updated to Névjegy, French untouched
+        assert merged_data["mTerms"]["Array"][0]["Languages"]["Array"][0] == "Névjegy"
+        assert merged_data["mTerms"]["Array"][0]["Languages"]["Array"][1] == "À propos"
+
