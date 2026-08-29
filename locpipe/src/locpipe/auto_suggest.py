@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, List, Optional
 
@@ -19,8 +20,30 @@ class SuggestionResult:
     recommended_preset: str
     preset_rationale: str
     style_guide_content: str
-    glossary_items: list[dict[str, str]]
-    character_voices: list[dict[str, str]]
+    glossary_items: list[dict[str, str]] = field(default_factory=list)
+    character_voices: list[dict[str, str]] = field(default_factory=list)
+    suggested_path_excludes: list[str] = field(default_factory=list)
+
+
+def is_safe_path_exclude(pattern_str: str, entries: List[Entry]) -> bool:
+    """Conservative safety check: ensure an exclusion regex does NOT match actual player dialogue."""
+    try:
+        rx = re.compile(pattern_str)
+    except re.error:
+        return False
+
+    for e in entries:
+        json_path_str = (
+            ".".join(str(p) for p in e.extra.get("json_path", []))
+            if e.extra.get("json_path")
+            else e.key
+        )
+        if rx.search(json_path_str):
+            src = e.source.strip()
+            # If the candidate path holds multi-word narrative dialogue, reject it to be safe
+            if len(src.split()) >= 4 or (src.endswith((".", "!", "?")) and len(src.split()) >= 2):
+                return False
+    return True
 
 
 async def analyze_project_and_suggest(
@@ -41,10 +64,19 @@ async def analyze_project_and_suggest(
     if not all_entries:
         raise ValueError(f"No entries could be extracted from batch files in '{config.project}'.")
 
-    # Sample representative strings
+    # Sample representative strings with paths
     sample_entries = all_entries[:sample_size]
     sample_texts = [
-        {"source": e.source, "notes": e.notes, "category": e.category}
+        {
+            "path": (
+                ".".join(str(p) for p in e.extra.get("json_path", []))
+                if e.extra.get("json_path")
+                else e.key
+            ),
+            "source": e.source,
+            "notes": e.notes,
+            "category": e.category,
+        }
         for e in sample_entries
         if e.source and len(e.source.strip()) > 1
     ]
@@ -54,7 +86,7 @@ async def analyze_project_and_suggest(
 
     system_prompt = (
         "You are an expert video game localization director for English -> Hungarian.\n"
-        "Analyze the provided sample game strings and game title to determine the optimal localization resources.\n\n"
+        "Analyze the provided sample game strings, JSON paths, and game title to determine optimal localization resources.\n\n"
         "Available Language Style Presets:\n"
         f"{preset_list_str}\n\n"
         "Respond ONLY with a JSON object with this exact schema:\n"
@@ -66,8 +98,14 @@ async def analyze_project_and_suggest(
         "  ],\n"
         '  "character_voices": [\n'
         '    {"character": "Character name", "register": "informal/formal", "traits": "Short description of speech style"}\n'
+        "  ],\n"
+        '  "suggested_path_excludes": [\n'
+        '    "^regex_pattern_for_internal_metadata_or_debug_paths_only"\n'
         "  ]\n"
-        "}"
+        "}\n\n"
+        "IMPORTANT FOR PATH EXCLUDES:\n"
+        "Only suggest path regexes for branches that are UNAMBIGUOUSLY internal developer metadata, debug tools, telemetry, or foreign language array indices.\n"
+        "NEVER suggest excluding paths that contain player-facing dialogue, UI labels, subtitles, or quests."
     )
 
     user_payload = json.dumps(
@@ -104,10 +142,21 @@ async def analyze_project_and_suggest(
 
     style_guide_content = LANG_STYLE_PRESETS[rec_preset]
 
+    # Validate suggested path excludes for safety
+    raw_excludes = data.get("suggested_path_excludes", [])
+    safe_excludes = []
+    if isinstance(raw_excludes, list):
+        for pattern in raw_excludes:
+            if isinstance(pattern, str) and pattern.strip():
+                p_str = pattern.strip()
+                if is_safe_path_exclude(p_str, all_entries):
+                    safe_excludes.append(p_str)
+
     return SuggestionResult(
         recommended_preset=rec_preset,
         preset_rationale=data.get("preset_rationale", ""),
         style_guide_content=style_guide_content,
         glossary_items=data.get("glossary", []),
         character_voices=data.get("character_voices", []),
+        suggested_path_excludes=safe_excludes,
     )

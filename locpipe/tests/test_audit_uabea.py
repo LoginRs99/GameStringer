@@ -185,3 +185,24 @@ def test_audit_with_suggest_mock_provider(tmp_path: Path, capsys) -> None:
     assert "AI RESOURCE & STYLE AUTO-DISCOVERY" in captured.out
     assert (proj / "resources" / "lang-style.md").exists()
 
+
+def test_is_safe_path_exclude():
+    from locpipe.auto_suggest import is_safe_path_exclude
+    from locpipe.models import Entry
+
+    entries = [
+        Entry(file="test.json", key="dialogue.scene1", source="Hello there traveler! How are you today?"),
+        Entry(file="test.json", key="meta.debug_flag", source="DEBUG_FLAG_ON"),
+        Entry(file="test.json", key="ui.btn_save", source="Save"),
+    ]
+
+    # Safe pattern: matches only meta
+    assert is_safe_path_exclude(r"^meta\.", entries) is True
+
+    # Unsafe pattern: would match multi-word narrative dialogue
+    assert is_safe_path_exclude(r"^dialogue\.", entries) is False
+
+    # Invalid regex syntax is handled safely
+    assert is_safe_path_exclude(r"^[invalid", entries) is False
+
+

@@ -242,6 +242,11 @@ def cmd_audit(args: argparse.Namespace) -> int:
                 for cv in sugg.character_voices[:4]:
                     print(f"    • {cv.get('character')} ({cv.get('register', 'informal')}): {cv.get('traits')}")
 
+            if sugg.suggested_path_excludes:
+                print(f"\n  Suggested Path Excludes ({len(sugg.suggested_path_excludes)}):")
+                for rx in sugg.suggested_path_excludes:
+                    print(f"    • {rx}")
+
             if getattr(args, "apply", False):
                 # Apply suggested preset to lang-style.md
                 ls_path = config.resources.get("lang_style") or (config.root / "resources" / "lang-style.md")
@@ -277,6 +282,26 @@ def cmd_audit(args: argparse.Namespace) -> int:
                         cv_lines.append(f"| {ch} | {reg} | {traits} | Out-of-character tone |")
                     cv_path.write_text("\n".join(cv_lines) + "\n", encoding="utf-8")
                     print(f"  [APPLIED] Written {len(sugg.character_voices)} characters to {cv_path}")
+
+                # Apply suggested path excludes if present
+                if sugg.suggested_path_excludes:
+                    import yaml
+                    cfg_file = config.root / "project.yaml"
+                    if cfg_file.exists():
+                        cfg_data = yaml.safe_load(cfg_file.read_text(encoding="utf-8")) or {}
+                        f_opts = cfg_data.setdefault("format_options", {})
+                        p_ex = f_opts.setdefault("uabea_json_path_exclude", [])
+                        if not isinstance(p_ex, list):
+                            p_ex = [str(p_ex)]
+                            f_opts["uabea_json_path_exclude"] = p_ex
+                        added = 0
+                        for rx in sugg.suggested_path_excludes:
+                            if rx not in p_ex:
+                                p_ex.append(rx)
+                                added += 1
+                        if added > 0:
+                            cfg_file.write_text(yaml.dump(cfg_data, sort_keys=False, allow_unicode=True), encoding="utf-8")
+                            print(f"  [APPLIED] Added {added} path exclude regex(es) to {cfg_file}")
             else:
                 print("\nTip: Run with `locpipe audit --suggest --apply` to automatically write these resources.")
             print("==========================================")
