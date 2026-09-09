@@ -20,7 +20,7 @@ When a user asks you to translate or verify a game project under `locpipe/projec
 
 ### Step 1: Validate `project.yaml` & Resources
 1. **Format:** Verify that `format` (e.g. `uabea_json`, `unity`, `generic_kv`, `po_gettext`) matches the actual file structure inside `batches/`.
-2. **Provider:** Ensure `provider.name: antigravity_cli`, `model: gemini-3.7-flash` (effort: `low`), and `review_model: gemini-3.7-flash` (effort: `high`).
+2. **Provider:** Ensure `provider.name: antigravity_cli`, `model: gemini-3.8-flash` (effort: `low`), and `review_model: gemini-3.8-flash` (effort: `high`).
 3. **Register:** Set `target_register: informal` (tegeződés, standard for gaming).
 4. **Style Guide (`resources/lang-style.md`):** Ensure it is NOT empty. Apply one of the 4 standard presets from `locpipe/src/locpipe/presets.py`:
    - `Modern, laza` (action / adventure)

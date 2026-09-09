@@ -1,14 +1,26 @@
-"""
-Hungarian Character Font Warning & Font Asset Checker for GameStringer CLI.
+"""Hungarian Character Font Preflight Check.
 
-Scans game assets for TextMeshPro (TMP_FontAsset) and standard Font objects,
-checks for Hungarian glyph support (ő/ű/Ő/Ű), and warns translators of font limitations.
+Moved from gamestringer/core/font_checker.py -- gamestringer's
+`gamestringer check-fonts` CLI command and its GUI preflight tab both
+now import check_game_fonts from HERE instead (see Task 13/14). New in
+this module: apply_hungarian_fallback_if_needed(), which auto-configures
+format_options.character_replacements on a ProjectConfig when Hungarian
+glyph support is missing -- closing the gap where a human previously had
+to click a fallback button in gamestringer's Projects tab GUI
+(projects_tab.py's _DEFAULT_CHAR_FALLBACK).
 """
 
+from __future__ import annotations
+
+import json
+import logging
 import os
 import re
-from typing import List, Dict, Any, Tuple
-from gamestringer.core.logger import logger
+import time
+from pathlib import Path
+from typing import Any, Dict, List
+
+logger = logging.getLogger(__name__)
 
 try:
     import UnityPy
@@ -19,12 +31,14 @@ except ImportError:
 
 HU_GLYPHS = {"ő", "ű", "Ő", "Ű", "\u0151", "\u0171", "\u0150", "\u0170"}
 
+# Same mapping gamestringer/desktop_gui/tabs/projects_tab.py's "one-click
+# shortcut" button used to write into project.yaml by hand.
+DEFAULT_HU_FALLBACK = {"ő": "ô", "ű": "û", "Ő": "Ô", "Ű": "Û"}
+
 
 def check_game_fonts(input_path: str, engine_name: str) -> Dict[str, Any]:
-    """
-    Check game font assets for Hungarian glyph support (ő/ű).
-
-    Returns summary dict with result status and detailed report.
+    """Check game font assets for Hungarian glyph support (ő/ű).
+    Logic unchanged from gamestringer/core/font_checker.py.
     """
     eng_lower = engine_name.lower()
     if eng_lower not in ("unity", "il2cpp"):
@@ -39,7 +53,6 @@ def check_game_fonts(input_path: str, engine_name: str) -> Dict[str, Any]:
     hu_glyphs_detected = False
     hu_config_detected = False
 
-    # Scan for loose TTF/OTF fonts & text localization configs
     base_dir = os.path.dirname(os.path.abspath(input_path)) if os.path.isfile(input_path) else os.path.abspath(input_path)
     for root, _, files in os.walk(base_dir):
         for f in files:
@@ -58,7 +71,6 @@ def check_game_fonts(input_path: str, engine_name: str) -> Dict[str, Any]:
                 except Exception:
                     pass
 
-    # Unity Asset Inspection using UnityPy if available
     if UnityPy is not None:
         asset_files = []
         if os.path.isfile(base_dir):
@@ -70,7 +82,6 @@ def check_game_fonts(input_path: str, engine_name: str) -> Dict[str, Any]:
                     if ext in (".bundle", ".assets", ".asset") or f.startswith("sharedassets") or f == "resources.assets":
                         asset_files.append(os.path.join(root, f))
 
-        # Inspect first 15 asset files for Font / TMP_FontAsset
         for full in asset_files[:15]:
             try:
                 env = UnityPy.load(full)
@@ -112,5 +123,46 @@ def check_game_fonts(input_path: str, engine_name: str) -> Dict[str, Any]:
         "engine": engine_name,
         "font_assets": font_assets,
         "hungarian_support": supported,
-        "message": msg
+        "message": msg,
     }
+
+
+def apply_hungarian_fallback_if_needed(config, asset_path: str, engine: str) -> Dict[str, Any]:
+    """Runs check_game_fonts() and, if Hungarian glyph support is NOT
+    detected, fills any MISSING keys of DEFAULT_HU_FALLBACK into
+    config.format_options["character_replacements"] -- never overwriting a
+    mapping the human already configured by hand in project.yaml.
+
+    Mutates config in memory only. Deliberately does NOT rewrite
+    project.yaml on disk: round-tripping it through yaml.safe_load/
+    safe_dump would silently drop comments and reorder keys in a
+    human-authored file. Instead writes a separate, inspectable JSON
+    report under <project_root>/preflight/font_check_report.json so the
+    decision is auditable without touching the source of truth.
+    """
+    result = check_game_fonts(asset_path, engine)
+
+    applied_fallback: Dict[str, str] = {}
+    if not result.get("hungarian_support", True):
+        current = config.format_options.setdefault("character_replacements", {})
+        for src_char, fallback_char in DEFAULT_HU_FALLBACK.items():
+            if src_char not in current:
+                current[src_char] = fallback_char
+                applied_fallback[src_char] = fallback_char
+
+    report = {
+        "checked_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "asset_path": asset_path,
+        "engine": engine,
+        "font_check_result": result,
+        "character_replacements_applied": applied_fallback,
+        "character_replacements_in_effect": dict(config.format_options.get("character_replacements", {})),
+    }
+    report_dir = Path(config.root) / "preflight"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    (report_dir / "font_check_report.json").write_text(
+        json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+    result["character_replacements_applied"] = applied_fallback
+    return result

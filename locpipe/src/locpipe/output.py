@@ -44,6 +44,15 @@ class RunStats:
     high_qa_failures: int = 0
     escalated_to_high_count: int = 0
     escalation_reasons: dict[str, int] = field(default_factory=dict)
+    # Entries that exhausted Tier 1 (mechanical repair), Tier 2 (low-QA
+    # review), and Tier 3 (high-QA/escalation review) and still failed
+    # validation. With no human review loop, these ship as explicit
+    # source-language passthrough (origin="untranslated_fallback") rather
+    # than a blank or broken string -- see pipeline.py's _finalize_file.
+    # Non-zero here is a signal worth checking after every run, not a
+    # silent fallback: it means these specific strings need a human's
+    # attention even though the pipeline itself never blocks on them.
+    still_blocked_after_all_tiers: int = 0
 
     @property
     def strings_saved_by_dedup_and_tm(self) -> int:
@@ -79,6 +88,12 @@ class RunStats:
             base += (
                 f" | ⚠ {self.wasted_retry_attempts} wasted full-payload retry attempt(s) -- "
                 f"a batch_size is likely too large for max_output_tokens, see project.yaml"
+            )
+        if self.still_blocked_after_all_tiers:
+            base += (
+                f" | ⚠ {self.still_blocked_after_all_tiers} entries shipped as source-language "
+                f"passthrough (origin=untranslated_fallback) after exhausting every QA tier -- "
+                f"review these specifically before calling the title done"
             )
         if self.cache_stats:
             base += f" | cache: {self.cache_stats}"

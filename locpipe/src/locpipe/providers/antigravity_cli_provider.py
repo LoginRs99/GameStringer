@@ -110,7 +110,7 @@ class AntigravityCLIProvider(TranslationProvider):
 
     def __init__(
         self,
-        model: str = "gemini-3.7-flash",
+        model: str = "gemini-3.8-flash",
         max_concurrency: int = 2,
         timeout_s: int = 300,
         effort: str = "low",
@@ -142,7 +142,9 @@ class AntigravityCLIProvider(TranslationProvider):
     def _run_agy(self, full_prompt: str, effort: Optional[str] = None) -> str:
         # To avoid Windows command-line character length limit (32,767 chars),
         # write the full prompt to a temporary UTF-8 text file and pass its path to `agy --print`.
-        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as temp_file:
+        with tempfile.NamedTemporaryFile(
+            "w", prefix="locpipe_agy_prompt_", suffix=".txt", delete=False, encoding="utf-8"
+        ) as temp_file:
             temp_file.write(full_prompt)
             temp_prompt_path = temp_file.name
         # Belt-and-suspenders: NamedTemporaryFile already creates with 0600 on

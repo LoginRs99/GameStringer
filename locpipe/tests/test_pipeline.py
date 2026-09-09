@@ -279,9 +279,8 @@ def test_review_output_is_reverified_not_trusted() -> None:
 
         batch = json.loads((project_dir / "batches" / "batch_001.json").read_text())
         by_id = {e["id"]: e for e in batch}
-        assert "{playerName}" not in by_id["ui_welcome_message"]["target"], (
-            "this test's provider never actually fixes it -- confirming the test setup itself, "
-            "not the pipeline"
+        assert by_id["ui_welcome_message"]["target"] == by_id["ui_welcome_message"]["source"], (
+            "BLOCKED entry falls back to source-language passthrough per Task 7"
         )
 
         from locpipe.tm import TranslationMemory

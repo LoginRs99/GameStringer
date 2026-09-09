@@ -16,7 +16,7 @@ from click.testing import CliRunner
 # Add root directory to sys.path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from gamestringer.core.font_checker import check_game_fonts
+from locpipe.preflight.font_check import check_game_fonts
 from gamestringer.core.addressables_crc import calculate_crc32, fix_catalog_crc_command, auto_update_addressables_crc
 from gamestringer.core.backup import create_backup, restore_backup, list_backups
 from gamestringer.core.quote_checker import check_xliff_quotes

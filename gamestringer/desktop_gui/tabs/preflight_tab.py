@@ -11,7 +11,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from typing import Callable, Optional
 
-from gamestringer.core.font_checker import check_game_fonts
+from locpipe.preflight.font_check import check_game_fonts
 from gamestringer.core.addressables_crc import fix_catalog_crc_command
 from gamestringer.core.backup import create_backup
 from gamestringer.desktop_gui.theme import (

@@ -140,9 +140,9 @@ categories:
 
 provider:
   name: antigravity_cli     # Google Antigravity CLI motor
-  model: gemini-3.7-flash   # fordítási modell
+  model: gemini-3.8-flash   # fordítási modell
   effort: low               # low | high (gondolkodási szint)
-  review_model: gemini-3.7-flash
+  review_model: gemini-3.8-flash
   review_effort: high       # magasabb effort a minőségi QA javításhoz
   max_concurrency: 2
 

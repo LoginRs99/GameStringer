@@ -379,10 +379,10 @@ class ProjectsTab(ttk.Frame):
         # Row: Translate Phase
         r_t = ttk.Frame(sec_prov, style="Card.TFrame")
         r_t.pack(fill=tk.X, pady=3)
-        self.var_prov_model = tk.StringVar(value="gemini-3.7-flash")
+        self.var_prov_model = tk.StringVar(value="gemini-3.8-flash")
         r_tm, _ = labeled_combo(
             r_t, "Translate Model:", self.var_prov_model,
-            values=["gemini-3.7-flash", "gemini-3.1-pro"],
+            values=["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.1-pro"],
             width=18, label_width=16, state="normal",
             tooltip="Model used for initial batch translation pass (Phase 8). Accepts standard or custom typed model names."
         )
@@ -400,10 +400,10 @@ class ProjectsTab(ttk.Frame):
         # Row: Review Phase
         r_r = ttk.Frame(sec_prov, style="Card.TFrame")
         r_r.pack(fill=tk.X, pady=3)
-        self.var_prov_review_model = tk.StringVar(value="gemini-3.7-flash")
+        self.var_prov_review_model = tk.StringVar(value="gemini-3.8-flash")
         r_rm, _ = labeled_combo(
             r_r, "Review Model:", self.var_prov_review_model,
-            values=["gemini-3.7-flash", "gemini-3.1-pro"],
+            values=["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.1-pro"],
             width=18, label_width=16, state="normal",
             tooltip="Model used for Tier 1 review/repair of flagged items (Phase 13). Accepts standard or custom typed model names."
         )
@@ -424,7 +424,7 @@ class ProjectsTab(ttk.Frame):
         self.var_prov_escalation_model = tk.StringVar(value="")
         r_em, _ = labeled_combo(
             r_e, "Escalation Model:", self.var_prov_escalation_model,
-            values=["", "gemini-3.7-flash", "gemini-3.1-pro"],
+            values=["", "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.1-pro"],
             width=18, label_width=16, state="normal",
             tooltip="Optional: Model for Tier 2 escalation when review fails. Leave blank to inherit Review Model."
         )
@@ -1020,9 +1020,9 @@ class ProjectsTab(ttk.Frame):
 
             # Load provider configuration
             provider_cfg = self.raw_config.get("provider", {})
-            self.var_prov_model.set(provider_cfg.get("model", "gemini-3.7-flash"))
+            self.var_prov_model.set(provider_cfg.get("model", "gemini-3.8-flash"))
             self.var_prov_effort.set(provider_cfg.get("effort", "low"))
-            self.var_prov_review_model.set(provider_cfg.get("review_model", "gemini-3.7-flash"))
+            self.var_prov_review_model.set(provider_cfg.get("review_model", "gemini-3.8-flash"))
             self.var_prov_review_effort.set(provider_cfg.get("review_effort", "high"))
             self.var_prov_escalation_model.set(provider_cfg.get("escalation_model", "") or "")
             self.var_prov_escalation_effort.set(provider_cfg.get("escalation_effort", "") or "")
@@ -1110,9 +1110,9 @@ class ProjectsTab(ttk.Frame):
             ],
             "provider": {
                 "name": "antigravity_cli",
-                "model": "gemini-3.7-flash",
+                "model": "gemini-3.8-flash",
                 "effort": "low",
-                "review_model": "gemini-3.7-flash",
+                "review_model": "gemini-3.8-flash",
                 "review_effort": "high",
                 "mode": "sync",
                 "max_concurrency": 5,
@@ -1259,9 +1259,9 @@ class ProjectsTab(ttk.Frame):
         if "provider" not in cfg:
             cfg["provider"] = {}
         cfg["provider"]["name"] = "antigravity_cli"
-        cfg["provider"]["model"] = self.var_prov_model.get().strip() or "gemini-3.7-flash"
+        cfg["provider"]["model"] = self.var_prov_model.get().strip() or "gemini-3.8-flash"
         cfg["provider"]["effort"] = self.var_prov_effort.get().strip() or "low"
-        cfg["provider"]["review_model"] = self.var_prov_review_model.get().strip() or "gemini-3.7-flash"
+        cfg["provider"]["review_model"] = self.var_prov_review_model.get().strip() or "gemini-3.8-flash"
         cfg["provider"]["review_effort"] = self.var_prov_review_effort.get().strip() or "high"
 
         esc_model = self.var_prov_escalation_model.get().strip()

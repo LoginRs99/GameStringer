@@ -3,10 +3,10 @@
 > Paste this into new AI sessions to maintain project context.
 
 ## Project Scope
-Unified localization pipeline and desktop preflight GUI (`gamestringer-gui`) wrapping the `locpipe` translation engine with **Google Antigravity CLI** (`gemini-3.7-flash`) as the sole LLM provider.
+Unified localization pipeline and desktop preflight GUI (`gamestringer-gui`) wrapping the `locpipe` translation engine with **Google Antigravity CLI** (`gemini-3.8-flash`) as the sole LLM provider.
 
 - **No Game Binary Parsing**: Binary extraction is an external, manual step (UABEA for Unity, Unreal Localization Dashboard for Unreal).
-- **Sole LLM Provider**: `antigravity_cli` (Gemini 3.7 Flash). Non-Antigravity providers are rejected at config load time. Subprocess calls are hardened with timeout, backoff retry, and stderr logging.
+- **Sole LLM Provider**: `antigravity_cli` (Gemini 3.8 Flash). Non-Antigravity providers are rejected at config load time. Subprocess calls are hardened with timeout, backoff retry, and stderr logging.
 - **Tkinter GUI (`gamestringer-gui`)**: 4 focused tabs: Projects, Preflight, Audit, Run.
 - **Engine-Independent Utilities**: Hungarian font glyph checker (`font_checker.py`, Unity/IL2CPP only) and Unity Addressables CRC fixer (`addressables_crc.py`).
 
@@ -40,5 +40,5 @@ locpipe run --project <project_path>
 2. **Configure**: Scaffold and edit `project.yaml` via Projects Tab.
 3. **Preflight**: Verify font glyph support and audit extraction noise via Preflight & Audit Tabs.
 4. **Plan**: Run `locpipe plan` to preview deduplication ratio and token estimates (0 API cost).
-5. **Translate**: Run `locpipe run` with Antigravity CLI (`gemini-3.7-flash`).
+5. **Translate**: Run `locpipe run` with Antigravity CLI (`gemini-3.8-flash`).
 6. **Reimport**: Reimport translated files back into the game, then run `fix-catalog` if Unity IL2CPP.

@@ -42,6 +42,8 @@ from .reviewer import review_batch
 from .schemas import build_retry_payload, build_system_prompt_for_category, build_user_payload, parse_and_validate_response
 from .tm import TranslationMemory
 from .validators.registry import run_validator
+from .validators.protected_tokens import audit_entry_tokens
+from .validators.quote_balance import audit_quote_pair
 
 _CHAR_ROW_RE = re.compile(r"^\|\s*([^|]+?)\s*\|")
 
@@ -81,6 +83,39 @@ def _attribute_issues(
             vr.critical += unattributed.critical
             vr.major += unattributed.major
     return by_key
+
+
+def _run_all_validators(
+    path: Path,
+    file_entries: list[Entry],
+    config: ProjectConfig,
+    format_kwargs: dict,
+) -> dict[str, ValidationResult]:
+    """Single validation pass for a file: format-specific checks
+    (run_validator, dispatched by config.format) PLUS two format-agnostic
+    checks that apply to every adapter regardless of per-format coverage --
+    audit_entry_tokens (placeholder/tag/printf-spec preservation) and
+    audit_quote_pair (quote balance/style). Before this helper existed,
+    protected-token checking only ran for uabea_json and hu_spelling --
+    unity/po_gettext/ue4_5_po/xliff projects had zero placeholder
+    protection. Called from both _finalize_file (initial validation) and
+    _tier1_repair (post-repair re-validation) so a repair attempt is
+    re-checked against the exact same rules it was originally flagged
+    against, not a narrower subset.
+    """
+    file_validation = run_validator(
+        config.format, path, config.resources.get("glossary"), entry_key=str(path), format_kwargs=format_kwargs
+    )
+    per_entry = _attribute_issues(file_validation, file_entries)
+    for e in file_entries:
+        vr = per_entry[e.key]
+        for issue in audit_entry_tokens(e.source, e.target):
+            if any("placeholder" in x.message.lower() or "darabszam" in x.message.lower() for x in vr.all_issues):
+                continue
+            getattr(vr, issue.severity.value.lower()).append(issue)
+        for issue in audit_quote_pair(e.source, e.target):
+            getattr(vr, issue.severity.value.lower()).append(issue)
+    return per_entry
 
 
 async def _call_complete(
@@ -297,10 +332,7 @@ async def _tier1_repair(
         await asyncio.gather(*(_repair_category(name, entries) for name, entries in by_category.items()))
 
         merge_all(file_entries, adapter)
-        file_validation = run_validator(
-            config.format, path, config.resources.get("glossary"), entry_key=str(path), format_kwargs=format_kwargs
-        )
-        new_per_entry = _attribute_issues(file_validation, file_entries)
+        new_per_entry = _run_all_validators(path, file_entries, config, format_kwargs)
         fixed_this_attempt = sum(
             1 for e in failing if per_entry[e.key].critical or per_entry[e.key].major
             if new_per_entry[e.key].passed
@@ -374,10 +406,7 @@ def _finalize_file(
         format_kwargs["source_col"] = (config.format_options.get("source_column_names") or ["source"])[0]
         format_kwargs["target_col"] = (config.format_options.get("target_column_names") or ["target"])[0]
 
-    file_validation = run_validator(
-        config.format, path, config.resources.get("glossary"), entry_key=str(path), format_kwargs=format_kwargs
-    )
-    per_entry = _attribute_issues(file_validation, file_entries)
+    per_entry = _run_all_validators(path, file_entries, config, format_kwargs)
 
     tier1_repaired = 0
     if config.tier1_repair_attempts > 0 and any(
@@ -570,6 +599,25 @@ def _finalize_file(
                     "-- downgraded to BLOCKED rather than committed as reviewed"
                 )
 
+    # Zero-human-loop terminal handling: an entry that is still BLOCKED here
+    # has exhausted every automatic tier (Tier 1 mechanical repair, Tier 2
+    # low-QA, Tier 3 high-QA/escalation) and would otherwise ship with
+    # whatever half-finished value entry.target holds -- possibly text that
+    # already failed a CRITICAL check. With no human reviewer to resolve
+    # review_report.md, that's not acceptable: explicit source-language
+    # passthrough instead, never a blank or broken string. Status is left as
+    # BLOCKED (not VALIDATED/REVIEWED) on purpose, so commit_to_tm below --
+    # which only looks at VALIDATED/REVIEWED entries -- never writes this
+    # fallback into the TM, where it would poison future reuse of the same
+    # source string with an untranslated answer.
+    still_blocked = [e for e in file_entries if e.status == EntryStatus.BLOCKED]
+    for e in still_blocked:
+        e.target = e.source
+        e.origin = "untranslated_fallback"
+    if still_blocked:
+        merge_all(still_blocked, adapter)
+        print(f"  [fallback] {len(still_blocked)} entr(y/ies) shipped as source-language passthrough (see stats.json)")
+
     # Write half of "translation memory" -- only for THIS file, THIS call.
     # Only resolved statuses qualify: NEEDS_REVIEW/BLOCKED are exactly the
     # ones that shouldn't propagate an unresolved answer into future reuse.
@@ -592,6 +640,7 @@ def _finalize_file(
         "fidelity_failures": fidelity_failures,
         "newly_committed": newly_committed,
         "tier1_repaired": tier1_repaired,
+        "still_blocked": len(still_blocked),
         "low_qa_calls": low_qa_calls,
         "low_qa_repairs": low_qa_repairs,
         "low_qa_failures": low_qa_failures,
@@ -691,6 +740,7 @@ def run(
     high_qa_failures = 0
     escalated_to_high_count = 0
     escalation_reasons: dict[str, int] = {}
+    still_blocked_after_all_tiers = 0
 
     if config.provider.mode == "batch" and hasattr(provider, "submit_batch"):
         entries_by_file: dict[str, list[Entry]] = {}
@@ -840,6 +890,7 @@ def run(
             high_qa_calls += result.get("high_qa_calls", 0)
             high_qa_repairs += result.get("high_qa_repairs", 0)
             escalated_to_high_count += result.get("escalated_to_high_count", 0)
+            still_blocked_after_all_tiers += result.get("still_blocked", 0)
             for k, v in result.get("escalation_reasons", {}).items():
                 escalation_reasons[k] = escalation_reasons.get(k, 0) + v
             checkpoint.mark_file_done(str(path))
@@ -971,6 +1022,7 @@ def run(
                 high_qa_calls += result.get("high_qa_calls", 0)
                 high_qa_repairs += result.get("high_qa_repairs", 0)
                 escalated_to_high_count += result.get("escalated_to_high_count", 0)
+                still_blocked_after_all_tiers += result.get("still_blocked", 0)
                 for k, v in result.get("escalation_reasons", {}).items():
                     escalation_reasons[k] = escalation_reasons.get(k, 0) + v
                 checkpoint.mark_file_done(str(path))
@@ -1022,6 +1074,7 @@ def run(
         high_qa_repairs=high_qa_repairs,
         escalated_to_high_count=escalated_to_high_count,
         escalation_reasons=escalation_reasons,
+        still_blocked_after_all_tiers=still_blocked_after_all_tiers,
     )
     write_stats(stats, config.root / "stats.json")
     tm.close()

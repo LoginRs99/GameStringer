@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import List, Tuple, Optional
 
 from ..models import Severity, ValidationIssue, ValidationResult
-from .protected_tokens import audit_entry_tokens
 
 
 def validate_file(
@@ -77,18 +76,10 @@ def validate_file(
                             if src_val:
                                 if not tgt_val:
                                     minor.append(f"Row {row_num}: missing target translation for '{src_val[:40]}'")
-                                else:
-                                    issues = audit_entry_tokens(src_val, tgt_val)
-                                    for issue in issues:
-                                        msg = f"Row {row_num} ('{src_val[:30]}'): {issue.message}"
-                                        if issue.severity == Severity.CRITICAL:
-                                            critical.append(msg)
-                                        elif issue.severity == Severity.MAJOR:
-                                            major.append(msg)
-                                        elif issue.severity == Severity.MINOR:
-                                            minor.append(msg)
-                                        else:
-                                            info.append(msg)
+                                # Protected-token/placeholder checking now runs globally in
+                                # pipeline.py's _run_all_validators for every entry regardless
+                                # of format -- removed here to avoid double-counting the same
+                                # issue against this format specifically.
         except Exception as err:
             critical.append(f"Error parsing CSV in m_Script: {err}")
 

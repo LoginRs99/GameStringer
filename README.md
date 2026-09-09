@@ -1,6 +1,6 @@
 # GameStringer — LocPipe Desktop Preflight & Translation Manager
 
-> **Unified Localization Pipeline & Preflight GUI** wrapping the `locpipe` deterministic translation engine with **Google Antigravity CLI** (`gemini-3.7-flash`) as the sole LLM provider.
+> **Unified Localization Pipeline & Preflight GUI** wrapping the `locpipe` deterministic translation engine with **Google Antigravity CLI** (`gemini-3.8-flash`) as the sole LLM provider.
 
 ---
 

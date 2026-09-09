@@ -97,7 +97,7 @@ class ProviderConfig:
     # explicitly in project.yaml). See providers/antigravity_cli_provider.py
     # for the known headless-stdout caveat that comes with this choice.
     name: str = "antigravity_cli"
-    model: str = "gemini-3.7-flash"
+    model: str = "gemini-3.8-flash"
     mode: str = "sync"           # "sync" | "batch"
     max_concurrency: int = 5
     max_retries: int = 5
@@ -113,7 +113,7 @@ class ProviderConfig:
     # if it doesn't, lower batch_size for that category rather than
     # relying on this being large enough to cover a mismatch.
     #
-    # 16384 leaves real headroom under gemini-3.7-flash/3.1-pro's actual
+    # 16384 leaves real headroom under gemini-3.8-flash/3.1-pro's actual
     # 65536-token output ceiling (checked directly against their model
     # cards, not assumed) while still catching a truncation early rather
     # than letting one runaway batch eat most of the model's real budget
@@ -151,6 +151,19 @@ class ProviderConfig:
     # 300s is generous for a normal batch; raise it if you intentionally run
     # very large batch_size values with a slow model.
     sync_call_timeout_s: int = 300
+
+
+@dataclass
+class PreflightConfig:
+    """Optional pre-run font/glyph check -- see preflight/font_check.py.
+    Disabled by default (font_check_asset_path=None) so projects without
+    a local game-asset dump available are unaffected; the moment
+    font_check_asset_path is set in project.yaml, cli.py's cmd_run/
+    cmd_plan call it automatically -- no manual step, no GUI button.
+    """
+    font_check_enabled: bool = False
+    font_check_engine: str = "unity"
+    font_check_asset_path: Optional[str] = None
 
 
 @dataclass
@@ -198,6 +211,7 @@ class ProjectConfig:
     # (~350 entries); raise it for projects with many small files, lower
     # it if memory is tight or you want to see files land sooner.
     translate_file_window: int = 8
+    preflight: "PreflightConfig" = field(default_factory=lambda: PreflightConfig())
 
     @property
     def batch_files(self) -> list[Path]:
@@ -272,7 +286,7 @@ def load_project(project_dir: str | Path) -> ProjectConfig:
     escalation_raw = raw.get("escalation") or raw.get("qa") or {}
     provider = ProviderConfig(
         name=provider_raw.get("name", "antigravity_cli"),
-        model=provider_raw.get("model", "gemini-3.7-flash"),
+        model=provider_raw.get("model", "gemini-3.8-flash"),
         mode=provider_raw.get("mode", "sync"),
         max_concurrency=provider_raw.get("max_concurrency", 5),
         max_retries=provider_raw.get("max_retries", 5),
@@ -304,6 +318,13 @@ def load_project(project_dir: str | Path) -> ProjectConfig:
             "Only 'informal' or 'formal' are supported."
         )
 
+    preflight_font_raw = (raw.get("preflight") or {}).get("font_check") or {}
+    preflight = PreflightConfig(
+        font_check_enabled=preflight_font_raw.get("enabled", False),
+        font_check_engine=preflight_font_raw.get("engine", "unity"),
+        font_check_asset_path=preflight_font_raw.get("asset_path"),
+    )
+
     return ProjectConfig(
         project=raw["project"],
         source_lang=raw["source_lang"],
@@ -327,4 +348,5 @@ def load_project(project_dir: str | Path) -> ProjectConfig:
         max_source_len_for_low=confidence_raw.get("max_source_len_for_low", 250),
         review_chunk_size=confidence_raw.get("review_chunk_size", 30),
         translate_file_window=raw.get("translate_file_window", 8),
+        preflight=preflight,
     )

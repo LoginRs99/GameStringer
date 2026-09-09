@@ -17,7 +17,7 @@ if sys.platform == "win32":
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from gamestringer.core.logger import setup_logger, logger
-from gamestringer.core.font_checker import check_game_fonts
+from locpipe.preflight.font_check import check_game_fonts
 from gamestringer.core.addressables_crc import fix_catalog_crc_command
 
 try:

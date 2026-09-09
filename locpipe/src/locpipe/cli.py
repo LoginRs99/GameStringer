@@ -8,6 +8,8 @@ from .config import load_project
 from .audit import run_audit, render_report_markdown
 from .adapters.registry import get_adapter
 from .pipeline import plan, run
+from .preflight.font_check import apply_hungarian_fallback_if_needed
+from .preflight.run_safety import snapshot_tm, sweep_orphaned_agy_artifacts
 
 _INIT_TEMPLATE = """\
 project: {name}
@@ -69,10 +71,10 @@ provider:
                           # signed in via `agy auth login`. gemini is an opt-in
                           # alternative (free-tier key at aistudio.google.com/apikey) --
                           # just swap this line, nothing else changes.
-  model: gemini-3.7-flash # bulk-translate model
+  model: gemini-3.8-flash # bulk-translate model
   effort: low             # low | high -- antigravity_cli only, ignored by other providers
-  review_model: gemini-3.7-flash # Phase 13 repair; null falls back to `model`. Verified
-                                 # (Artificial Analysis, Aug 2026): gemini-3.7-flash at
+  review_model: gemini-3.8-flash # Phase 13 repair; null falls back to `model`. Verified
+                                 # (Artificial Analysis, Aug 2026): gemini-3.8-flash at
                                  # high effort scores ABOVE gemini-3.1-pro on their
                                  # Intelligence Index (56 vs 48) while costing meaningfully
                                  # less per token -- Pro isn't the automatic "stronger model"
@@ -159,6 +161,13 @@ def _build_provider(
 
 def cmd_plan(args: argparse.Namespace) -> int:
     config = load_project(args.project)
+    if config.preflight.font_check_enabled and config.preflight.font_check_asset_path:
+        font_result = apply_hungarian_fallback_if_needed(
+            config, config.preflight.font_check_asset_path, config.preflight.font_check_engine
+        )
+        print(f"Font Preflight: {font_result['message'].splitlines()[0]}")
+        if font_result.get("character_replacements_applied"):
+            print(f"  Auto-applied character fallback: {font_result['character_replacements_applied']}")
     limit = args.limit or args.sample
     result = plan(config, limit_batches=limit)
 
@@ -315,6 +324,46 @@ def cmd_run(args: argparse.Namespace) -> int:
     config = load_project(args.project)
     limit = args.limit or args.sample
     pseudo_loc = getattr(args, "pseudo_loc", False)
+    is_real_run = not args.dry_run and not pseudo_loc
+
+    # Hook 1: font preflight + auto character-fallback (in-memory only; see
+    # preflight/font_check.py for why project.yaml itself is never rewritten).
+    if config.preflight.font_check_enabled and config.preflight.font_check_asset_path:
+        font_result = apply_hungarian_fallback_if_needed(
+            config, config.preflight.font_check_asset_path, config.preflight.font_check_engine
+        )
+        print(f"  Font Preflight: {font_result['message'].splitlines()[0]}")
+        if font_result.get("character_replacements_applied"):
+            print(f"  Auto-applied character fallback: {font_result['character_replacements_applied']}")
+
+    # Hook 2: sweep artifacts left behind by a prior crashed run, before this
+    # run creates any of its own.
+    sweep_result = sweep_orphaned_agy_artifacts()
+    if sweep_result["removed_temp_files"] or sweep_result["removed_sessions"]:
+        print(
+            f"  Startup Sweep:  removed {sweep_result['removed_temp_files']} orphaned temp file(s), "
+            f"{sweep_result['removed_sessions']} stale agy session dir(s)"
+        )
+
+    # Hook 3: TM snapshot before any real (billable, TM-writing) run.
+    if is_real_run:
+        snapshot_path = snapshot_tm(config)
+        print(f"  TM Snapshot:    {snapshot_path}")
+
+    # Hook 4: mandatory max_api_calls -- auto-calculated from plan() if the
+    # user didn't pass --max-api-calls explicitly. NOTE: this budget only
+    # counts bulk-translate calls (see _translate_batches_sync's counter) --
+    # Tier-1/review/escalation calls are NOT included, so a run can still
+    # exceed this ceiling in total LLM cost once QA overhead is added. Known
+    # limitation, not fixed here.
+    effective_max_api_calls = args.max_api_calls
+    if effective_max_api_calls is None and is_real_run:
+        plan_result = plan(config, limit_batches=limit)
+        effective_max_api_calls = max(1, int(plan_result["llm_calls_needed"] * 1.1) + 3)
+        print(
+            f"  Safety Budget:  auto-calculated max_api_calls = {effective_max_api_calls} "
+            f"(plan(): {plan_result['llm_calls_needed']} call(s) needed + 10% margin, bulk-translate only)"
+        )
 
     # Pre-flight report (Phase 10)
     mode_str = "PSEUDO-LOC (PseudoLocProvider)" if pseudo_loc else ("DRY-RUN (MockProvider)" if args.dry_run else config.provider.mode)
@@ -324,8 +373,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     print(f"  Format:         {config.format}")
     print(f"  Provider:       {config.provider.name} (model: {config.provider.model}, effort: {config.provider.effort})")
     print(f"  Mode:           {mode_str}")
-    if args.max_api_calls:
-        print(f"  Safety Budget:  Max {args.max_api_calls} API call(s)")
+    if effective_max_api_calls and args.max_api_calls:
+        print(f"  Safety Budget:  Max {args.max_api_calls} API call(s) (explicit)")
     if limit:
         print(f"  File Limit:     Only processing first {limit} file(s)")
     print("=====================================")
@@ -359,7 +408,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         review_provider=review_provider,
         escalation_provider=escalation_provider,
         limit_batches=limit,
-        max_api_calls=args.max_api_calls,
+        max_api_calls=effective_max_api_calls,
     )
     print(stats.summary())
     return 0
@@ -594,7 +643,7 @@ def cmd_bootstrap_resources(args: argparse.Namespace) -> int:
     else:
         print(f"  Character Voices:             Skipped (--skip-character-voices)")
 
-    review_model = config.provider.review_model or config.provider.model or "gemini-3.7-flash"
+    review_model = config.provider.review_model or config.provider.model or "gemini-3.8-flash"
     print(f"  Provider & Model:             {config.provider.name} ({review_model}, effort: high)")
     print(f"  Estimated LLM Calls:          {est_calls}")
     print(f"  Estimated Total Input Tokens: ~{est_input_tokens:,}")

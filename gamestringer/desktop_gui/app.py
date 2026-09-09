@@ -193,7 +193,7 @@ class GameStringerApp:
 
         lbl_badge = tk.Label(
             self.header_bar,
-            text="🔒 antigravity_cli • gemini-3.7-flash",
+            text="🔒 antigravity_cli • gemini-3.8-flash",
             font=FONT_MONO,
             bg=BG_INSET,
             fg=ACCENT_MOSS,
@@ -203,7 +203,7 @@ class GameStringerApp:
             bd=1
         )
         lbl_badge.pack(side=tk.RIGHT)
-        create_tooltip(lbl_badge, "Active Translation Engine: Antigravity CLI (Gemini 3.7 Flash)")
+        create_tooltip(lbl_badge, "Active Translation Engine: Antigravity CLI (Gemini 3.8 Flash)")
 
         # Mount Tabs
         self.tab_container = tk.Frame(self.content_area, bg=BG_BASE)
@@ -342,7 +342,7 @@ class GameStringerApp:
             "About GameStringer",
             "⌁ GameStringer v2.0.0 (Editorial Proofing Console)\n\n"
             "Unified LocPipe Desktop Preflight & Translation Manager\n"
-            "Sole LLM Provider: Antigravity CLI (gemini-3.7-flash)\n\n"
+            "Sole LLM Provider: Antigravity CLI (gemini-3.8-flash)\n\n"
             "• Manual game binary extraction (UABEA / Unreal PO)\n"
             "• Deterministic LocPipe translation pipeline\n"
             "• Preflight font glyph verification & Addressables CRC repair\n"

@@ -59,7 +59,7 @@ class Entry:
     tm_key: Optional[str] = None            # set by dedupe.py — (content_hash, category, context_key)
     confidence: Optional[float] = None
     validation_issues: list["ValidationIssue"] = field(default_factory=list)
-    origin: Optional[str] = None            # "tm" | "mt" | "reviewed" | "human"
+    origin: Optional[str] = None            # "tm" | "mt" | "reviewed" | "human" | "untranslated_fallback"
 
     @property
     def is_empty_or_stub(self) -> bool:
