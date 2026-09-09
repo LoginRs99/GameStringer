@@ -16,7 +16,7 @@ import io
 import json
 from pathlib import Path
 import re
-from typing import List, Optional, Set, Tuple
+from typing import Any, List, Optional, Set, Tuple
 
 from ..models import Severity, ValidationIssue, ValidationResult
 from .protected_tokens import extract_protected_tokens
@@ -169,15 +169,83 @@ def _clean_text_for_spellcheck(text: str) -> str:
     return cleaned
 
 
+def build_glossary_word_whitelist(glossary_entries: Optional[List[Any]]) -> Set[str]:
+    """Collect every source/target word from a project's glossary into a
+    lowercase set, so glossary terms -- which may legitimately not be in a
+    general-purpose Hungarian dictionary (lore names, coined terms) -- are
+    never flagged as misspellings. Shared by validate_file (whole-file,
+    legacy entry point, kept for standalone callers) and spellcheck_target
+    (per-Entry, called from pipeline.py's _run_all_validators).
+    """
+    glossary_words: Set[str] = set()
+    if not glossary_entries:
+        return glossary_words
+    for item in glossary_entries:
+        if isinstance(item, dict):
+            src = item.get("source", "")
+            tgt = item.get("target", "")
+        elif isinstance(item, (list, tuple)):
+            src = item[0] if len(item) > 0 else ""
+            tgt = item[1] if len(item) > 1 else ""
+        else:
+            src = getattr(item, "source", "")
+            tgt = getattr(item, "target", "")
+        for w in _WORD_RE.findall(src):
+            glossary_words.add(w.lower())
+        for w in _WORD_RE.findall(tgt):
+            glossary_words.add(w.lower())
+    return glossary_words
+
+
+def spellcheck_target(target_text: str, glossary_words: Optional[Set[str]] = None) -> List[ValidationIssue]:
+    """Per-string Hungarian spellcheck, MINOR-only, never blocking -- same
+    contract as audit_entry_tokens/audit_quote_pair. Called once per Entry
+    from pipeline.py's _run_all_validators. Replaces hu_spelling's former
+    life as an unreachable pseudo-format: it had no matching adapter in
+    adapters/registry.py, so `format: hu_spelling` in project.yaml could
+    never actually run through `locpipe run`.
+    """
+    issues: List[ValidationIssue] = []
+    if not target_text or not target_text.strip():
+        return issues
+
+    spell = _get_spellchecker()
+    if spell is None:
+        return issues
+
+    glossary_words = glossary_words or set()
+    cleaned = _clean_text_for_spellcheck(target_text)
+    words = _WORD_RE.findall(cleaned)
+
+    candidates = [
+        w for w in words
+        if len(w) > 1 and w.lower() not in glossary_words and not w.isupper()
+    ]
+
+    for word in candidates:
+        if not is_hu_word_known(word, spell):
+            preview = target_text.replace("\n", " ")
+            if len(preview) > 50:
+                preview = preview[:47] + "..."
+            issues.append(
+                ValidationIssue(
+                    severity=Severity.MINOR,
+                    code="HU_SPELLING",
+                    message=f"Possible Hungarian misspelling: '{word}' in '{preview}'",
+                )
+            )
+    return issues
+
+
 def validate_file(
     path_str: str,
     glossary_entries: Optional[List[Any]] = None,
     target_lang: str = "hu",
 ) -> Tuple[List[str], List[str], List[str], List[str]]:
-    """Validate Hungarian spelling in target strings.
-    
+    """Whole-file entry point, kept for any standalone/script caller. No
+    longer wired into validators/registry.py's format dispatch -- see
+    spellcheck_target for the per-Entry path pipeline.py actually uses.
     Returns (critical, major, minor, info).
-    Spelling issues are strictly classified as MINOR.
     """
     critical: List[str] = []
     major: List[str] = []
@@ -187,46 +255,12 @@ def validate_file(
     if target_lang.lower() != "hu":
         return critical, major, minor, info
 
-    spell = _get_spellchecker()
-    if spell is None:
-        return critical, major, minor, info
-
-    # Build glossary word whitelist
-    glossary_words: Set[str] = set()
-    if glossary_entries:
-        for item in glossary_entries:
-            if isinstance(item, dict):
-                src = item.get("source", "")
-                tgt = item.get("target", "")
-            elif isinstance(item, (list, tuple)):
-                src = item[0] if len(item) > 0 else ""
-                tgt = item[1] if len(item) > 1 else ""
-            else:
-                src = getattr(item, "source", "")
-                tgt = getattr(item, "target", "")
-            for w in _WORD_RE.findall(src):
-                glossary_words.add(w.lower())
-            for w in _WORD_RE.findall(tgt):
-                glossary_words.add(w.lower())
-
+    glossary_words = build_glossary_word_whitelist(glossary_entries)
     path = Path(path_str)
     targets = _extract_target_strings(path, target_lang=target_lang)
 
     for target_text in targets:
-        cleaned = _clean_text_for_spellcheck(target_text)
-        words = _WORD_RE.findall(cleaned)
-
-        # Filter candidates
-        candidates = [
-            w for w in words
-            if len(w) > 1 and w.lower() not in glossary_words and not w.isupper()
-        ]
-
-        for word in candidates:
-            if not is_hu_word_known(word, spell):
-                preview = target_text.replace("\n", " ")
-                if len(preview) > 50:
-                    preview = preview[:47] + "..."
-                minor.append(f"Possible Hungarian misspelling: '{word}' in '{preview}'")
+        for issue in spellcheck_target(target_text, glossary_words):
+            minor.append(issue.message)
 
     return critical, major, minor, info

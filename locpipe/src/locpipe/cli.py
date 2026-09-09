@@ -373,8 +373,9 @@ def cmd_run(args: argparse.Namespace) -> int:
     print(f"  Format:         {config.format}")
     print(f"  Provider:       {config.provider.name} (model: {config.provider.model}, effort: {config.provider.effort})")
     print(f"  Mode:           {mode_str}")
-    if effective_max_api_calls and args.max_api_calls:
-        print(f"  Safety Budget:  Max {args.max_api_calls} API call(s) (explicit)")
+    if effective_max_api_calls:
+        budget_source = "explicit" if args.max_api_calls else "auto-calculated"
+        print(f"  Safety Budget:  Max {effective_max_api_calls} API call(s) ({budget_source})")
     if limit:
         print(f"  File Limit:     Only processing first {limit} file(s)")
     print("=====================================")

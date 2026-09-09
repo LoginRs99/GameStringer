@@ -31,7 +31,7 @@ class ErrorSimulationProvider(TranslationProvider):
         if self.mode == "invalid_json":
             if self.call_count == 1:
                 return "[{id: 0, translation: unquoted_val}"
-            out = [{"id": item["id"], "translation": f"[FIXED] {item['source']}"} for item in parsed]
+            out = [{"id": item["id"], "translation": f"FIXED: {item['source']}"} for item in parsed]
             return json.dumps(out)
 
         if self.mode == "corrupt_placeholder":
@@ -39,7 +39,7 @@ class ErrorSimulationProvider(TranslationProvider):
             return json.dumps(out)
 
         if self.mode == "valid":
-            out = [{"id": item["id"], "translation": f"[MOCK-OK] {item['source']}"} for item in parsed]
+            out = [{"id": item["id"], "translation": f"MOCK-OK: {item['source']}"} for item in parsed]
             return json.dumps(out)
 
         raise ValueError(f"Unknown mode {self.mode}")

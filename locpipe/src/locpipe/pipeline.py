@@ -44,6 +44,8 @@ from .tm import TranslationMemory
 from .validators.registry import run_validator
 from .validators.protected_tokens import audit_entry_tokens
 from .validators.quote_balance import audit_quote_pair
+from .validators.glossary_terms import load_glossary_for_check
+from .validators.validate_hu_spelling import build_glossary_word_whitelist, spellcheck_target
 
 _CHAR_ROW_RE = re.compile(r"^\|\s*([^|]+?)\s*\|")
 
@@ -107,6 +109,14 @@ def _run_all_validators(
         config.format, path, config.resources.get("glossary"), entry_key=str(path), format_kwargs=format_kwargs
     )
     per_entry = _attribute_issues(file_validation, file_entries)
+
+    # Loaded once per file (matches run_validator's own not-cached convention
+    # above), not once per entry.
+    glossary_path = config.resources.get("glossary")
+    glossary_words = build_glossary_word_whitelist(
+        load_glossary_for_check(str(glossary_path)) if glossary_path else []
+    )
+
     for e in file_entries:
         vr = per_entry[e.key]
         for issue in audit_entry_tokens(e.source, e.target):
@@ -114,6 +124,8 @@ def _run_all_validators(
                 continue
             getattr(vr, issue.severity.value.lower()).append(issue)
         for issue in audit_quote_pair(e.source, e.target):
+            getattr(vr, issue.severity.value.lower()).append(issue)
+        for issue in spellcheck_target(e.target, glossary_words):
             getattr(vr, issue.severity.value.lower()).append(issue)
     return per_entry
 

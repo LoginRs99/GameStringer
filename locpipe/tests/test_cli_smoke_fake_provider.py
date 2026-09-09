@@ -121,7 +121,7 @@ def test_cli_dry_run_smoke_test(tmp_path: Path) -> None:
         tgt_el = next((c for c in tu if c.tag.endswith("target")), None)
         assert src_el is not None and src_el.text, f"Trans-unit {tu_id} missing source text"
         assert tgt_el is not None and tgt_el.text, f"Trans-unit {tu_id} missing target text"
-        assert "[MOCK-HU]" in tgt_el.text or "[MOCK-REVIEWED]" in tgt_el.text, (
+        assert "MOCK-HU:" in tgt_el.text or "MOCK-REVIEWED:" in tgt_el.text, (
             f"Target text for {tu_id} must contain mock prefix: {tgt_el.text}"
         )
 
@@ -133,14 +133,14 @@ def test_cli_dry_run_smoke_test(tmp_path: Path) -> None:
 
 
 def test_cli_dry_run_never_writes_to_the_tm(tmp_path: Path) -> None:
-    """A dry run overwriting the batch file itself with [MOCK-HU] text
+    """A dry run overwriting the batch file itself with MOCK-HU: text
     (asserted above) is expected -- that's the actual pipeline output
     step being exercised. The TM database is different: it's not the
     file you're looking at, it silently affects every FUTURE run's
     translations via TM lookup, and `--dry-run` promising "no lasting
     effect" is the whole reason to reach for it in the first place. This
     used to fail before providers/base.py's persists_to_tm existed --
-    the TM would end up with "[MOCK-HU] ..." rows tagged with the exact
+    the TM would end up with "MOCK-HU: ..." rows tagged with the exact
     same origin="mt" a real translation gets, silently reused by a later
     real run's TM lookup.
     """

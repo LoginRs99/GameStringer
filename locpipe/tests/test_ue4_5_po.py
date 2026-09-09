@@ -140,12 +140,12 @@ def test_ue4_5_po_merge_round_trip_preserves_comments(tmp_path: Path):
     adapter = get_adapter("ue4_5_po", {})
     entries = adapter.extract(p)
     for e in entries:
-        e.target = f"[HU] {e.source}"
+        e.target = f"HU: {e.source}"
     adapter.merge(p, entries)
 
     content = p.read_text(encoding="utf-8")
     assert "Key:\tItemCountMsg" in content  # extracted comment survived the round trip
-    assert "[HU]" in content
+    assert "HU:" in content
 
 
 # --- Validator registry: run_validator("ue4_5_po", ...) end to end ---

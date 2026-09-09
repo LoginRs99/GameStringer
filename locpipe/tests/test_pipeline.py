@@ -83,7 +83,7 @@ class _FaultThenRepairProvider(TranslationProvider):
         if isinstance(parsed, list):
             out = []
             for item in parsed:
-                translation = f"[MOCK-HU] {item['source']}"
+                translation = f"MOCK-HU: {item['source']}"
                 if "{playerName}" in translation:
                     translation = translation.replace("{playerName}", "")  # inject the fault
                 out.append({"id": item["id"], "translation": translation})
@@ -158,7 +158,7 @@ class _FixesOnTier1RetryProvider(TranslationProvider):
         out = []
         for item in parsed:
             is_retry = "issue" in item
-            translation = f"[MOCK-HU] {item['source']}"
+            translation = f"MOCK-HU: {item['source']}"
             if "{playerName}" in translation and not is_retry:
                 translation = translation.replace("{playerName}", "")  # inject the fault, first attempt only
             out.append({"id": item["id"], "translation": translation})
@@ -198,7 +198,11 @@ def test_tier1_repair_fixes_without_review_call() -> None:
             # fine and expected. What must NOT be true is that it's there
             # because of the placeholder defect: if Tier 1 actually fixed
             # it, validation passed, so `issues` must be empty here.
-            assert by_key["ui_welcome_message"]["issues"] == [], (
+            non_spelling = [
+                i for i in by_key["ui_welcome_message"]["issues"]
+                if (i.get("code") if isinstance(i, dict) else getattr(i, "code", "")) != "HU_SPELLING"
+            ]
+            assert non_spelling == [], (
                 f"Tier 1 should have cleared the validation failure before this could be "
                 f"flagged for THAT reason: {by_key['ui_welcome_message']}"
             )
@@ -228,7 +232,7 @@ class _AlwaysBreaksPlaceholderProvider(TranslationProvider):
         if isinstance(parsed, list):
             out = []
             for item in parsed:
-                translation = f"[MOCK-HU] {item['source']}"
+                translation = f"MOCK-HU: {item['source']}"
                 if "{playerName}" in translation:
                     translation = translation.replace("{playerName}", "")
                 out.append({"id": item["id"], "translation": translation})
@@ -380,7 +384,7 @@ def test_tm_persists_across_runs() -> None:
     Uses a MockProvider subclass with persists_to_tm=True rather than
     MockProvider directly: MockProvider itself defaults that to False
     now (see providers/base.py) specifically so `locpipe run --dry-run`
-    can't silently pollute the real, persistent TM with "[MOCK-HU] ..."
+    can't silently pollute the real, persistent TM with "MOCK-HU: ..."
     placeholder text -- but THIS test's whole point is verifying TM
     persistence itself, which needs a provider that actually persists.
     """
@@ -426,7 +430,7 @@ class _CountingBatchProvider(TranslationProvider):
             out = [
                 {
                     "key": item["key"],
-                    "translation": f"[MOCK-REVIEWED] {item['source']}",
+                    "translation": f"MOCK-REVIEWED: {item['source']}",
                     "flag_for_human": False,
                     "reason": "",
                 }
@@ -443,7 +447,7 @@ class _CountingBatchProvider(TranslationProvider):
             items = json.loads(user_payload)
             results.append(
                 json.dumps(
-                    [{"id": item["id"], "translation": f"[MOCK-HU] {item['source']}"} for item in items],
+                    [{"id": item["id"], "translation": f"MOCK-HU: {item['source']}"} for item in items],
                     ensure_ascii=False,
                 )
             )
@@ -556,12 +560,12 @@ class _FailOnMarkerProvider(TranslationProvider):
         parsed = json.loads(user_payload)
 
         if isinstance(parsed, list):
-            out = [{"id": item["id"], "translation": f"[MOCK-HU] {item['source']}"} for item in parsed]
+            out = [{"id": item["id"], "translation": f"MOCK-HU: {item['source']}"} for item in parsed]
             return json.dumps(out, ensure_ascii=False)
 
         if isinstance(parsed, dict) and "items" in parsed:
             out = [
-                {"key": item["key"], "translation": f"[MOCK-HU] {item['source']}", "flag_for_human": False, "reason": ""}
+                {"key": item["key"], "translation": f"MOCK-HU: {item['source']}", "flag_for_human": False, "reason": ""}
                 for item in parsed["items"]
             ]
             return json.dumps(out, ensure_ascii=False)
@@ -679,7 +683,7 @@ def test_unity_csv_adapter_composite_key() -> None:
         assert by_source["Are you sure?"].notes == ["type:narrative"]
 
         for e in entries:
-            e.target = f"[HU] {e.source}"
+            e.target = f"HU: {e.source}"
         adapter.merge(csv_path, entries)
 
         with open(csv_path, encoding="utf-8") as f:
@@ -688,9 +692,9 @@ def test_unity_csv_adapter_composite_key() -> None:
         assert "Hungarian" in header
         hu_idx = header.index("Hungarian")
         by_keyname = {r[1]: r[hu_idx] for r in rows[1:]}
-        assert by_keyname["confirm_btn"] == "[HU] Confirm"
-        assert by_keyname["quest_confirm"] == "[HU] Are you sure?"
-        assert by_keyname["cancel_btn"] == "[HU] Cancel"
+        assert by_keyname["confirm_btn"] == "HU: Confirm"
+        assert by_keyname["quest_confirm"] == "HU: Are you sure?"
+        assert by_keyname["cancel_btn"] == "HU: Cancel"
 
         print("PASS  test_unity_csv_adapter_composite_key")
     finally:
@@ -714,7 +718,7 @@ class _TranslatesOverPatternProvider(TranslationProvider):
                 if "Overdrive" in src:
                     t = src.replace("Overdrive", "Túlhajtás")  # wrongly translated -- should stay "Overdrive"
                 else:
-                    t = f"[MOCK-HU] {src}"
+                    t = f"MOCK-HU: {src}"
                 out.append({"id": item["id"], "translation": t})
             return json.dumps(out, ensure_ascii=False)
         if isinstance(parsed, dict) and "items" in parsed:
@@ -748,7 +752,7 @@ class _FailsNTimesThenSucceedsProvider(TranslationProvider):
         if n < self.fail_count:
             return "this is not valid json at all, deliberately truncated-looking"
         items = json.loads(key)
-        out = [{"id": i["id"], "translation": f"[MOCK-HU] {i['source']}"} for i in items]
+        out = [{"id": i["id"], "translation": f"MOCK-HU: {i['source']}"} for i in items]
         return json.dumps(out, ensure_ascii=False)
 
 
@@ -955,7 +959,7 @@ class _PartialThenCompleteResponseProvider(TranslationProvider):
         n = self.attempts_by_payload.get(key, 0)
         self.attempts_by_payload[key] = n + 1
         items = json.loads(key)
-        out = [{"id": i["id"], "translation": f"[MOCK-HU] {i['source']}"} for i in items]
+        out = [{"id": i["id"], "translation": f"MOCK-HU: {i['source']}"} for i in items]
         if n == 0 and len(out) > 1:
             out = out[:-1]  # drop the last item's id -- a partial-but-valid response
         return json.dumps(out, ensure_ascii=False)

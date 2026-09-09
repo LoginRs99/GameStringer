@@ -33,7 +33,7 @@ class TrackedMockProvider(TranslationProvider):
             if key in self.fail_keys:
                 out.append({"key": key, "translation": item["current_translation"], "flag_for_human": True})
             else:
-                out.append({"key": key, "translation": f"[{self.name}-FIXED] {item['source']}", "flag_for_human": False})
+                out.append({"key": key, "translation": f"{self.name}-FIXED: {item['source']}", "flag_for_human": False})
         return json.dumps(out, ensure_ascii=False)
 
 

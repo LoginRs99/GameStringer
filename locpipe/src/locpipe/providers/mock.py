@@ -38,7 +38,7 @@ class MockProvider(TranslationProvider):
 
         # 1. Bulk-translation shape: [{"id": 0, "source": "..."}, ...]
         if isinstance(parsed, list) and len(parsed) > 0 and isinstance(parsed[0], dict) and "id" in parsed[0]:
-            out = [{"id": item["id"], "translation": f"[MOCK-HU] {item['source']}"} for item in parsed]
+            out = [{"id": item["id"], "translation": f"MOCK-HU: {item['source']}"} for item in parsed]
             return json.dumps(out, ensure_ascii=False)
 
         # 2. Review shape: {"items": [{"key": "...", "source": "..."}, ...]}
@@ -46,7 +46,7 @@ class MockProvider(TranslationProvider):
             out = [
                 {
                     "key": item["key"],
-                    "translation": f"[MOCK-REVIEWED] {item['source']}",
+                    "translation": f"MOCK-REVIEWED: {item['source']}",
                     "flag_for_human": False,
                     "reason": "",
                 }
@@ -62,7 +62,7 @@ class MockProvider(TranslationProvider):
             sample = parsed if isinstance(parsed, list) else []
             for item in sample[:5]:
                 src = item.get("source", "Term") if isinstance(item, dict) else "Term"
-                tgt = item.get("translation", f"[MOCK-HU] {src}") if isinstance(item, dict) else "[MOCK-HU]"
+                tgt = item.get("translation", f"MOCK-HU: {src}") if isinstance(item, dict) else "MOCK-HU:"
                 cat = item.get("category", "mechanic") if isinstance(item, dict) else "mechanic"
                 lines.append(f"| {src} | {tgt} | {cat} | 1.0 | Mock term |")
             return "\n".join(lines)
@@ -76,14 +76,14 @@ class MockProvider(TranslationProvider):
             return "# Character voice bible\n\n| Character | Register | Traits | Avoid |\n|---|---|---|---|\n| Hero | informal | courageous | slang |\n"
 
         if isinstance(parsed, list):
-            out = [{"id": idx, "translation": f"[MOCK-HU] {item.get('source', '')}"} for idx, item in enumerate(parsed)]
+            out = [{"id": idx, "translation": f"MOCK-HU: {item.get('source', '')}"} for idx, item in enumerate(parsed)]
             return json.dumps(out, ensure_ascii=False)
 
         if isinstance(parsed, dict) and "items" in parsed:  # review shape
             out = [
                 {
                     "key": item["key"],
-                    "translation": f"[MOCK-REVIEWED] {item['source']}",
+                    "translation": f"MOCK-REVIEWED: {item['source']}",
                     "flag_for_human": False,
                     "reason": "",
                 }

@@ -50,7 +50,7 @@ class _MockSampleProvider(TranslationProvider):
                 raise RuntimeError(f"Simulated failure on item {item_id} ({src})")
 
             # Translate plain words while preserving placeholders, tags, and newlines
-            target = f"[HU] {src}"
+            target = f"HU: {src}"
             out.append({"id": item_id, "translation": target})
 
         return json.dumps(out, ensure_ascii=False)
@@ -201,10 +201,10 @@ def test_representative_sample_end_to_end(tmp_path: Path) -> None:
     targets1 = {tu.attrib["id"]: list(tu.iter())[-1].text for tu in root1.iter() if tu.tag.endswith("trans-unit")}
 
     assert "ui_ok" in targets1
-    assert targets1["ui_ok"] == "[HU] OK"
+    assert targets1["ui_ok"] == "HU: OK"
     # Verify duplicates share identical translation
-    assert targets1["ui_cancel_1"] == "[HU] Cancel"
-    assert targets1["ui_cancel_2"] == "[HU] Cancel"
+    assert targets1["ui_cancel_1"] == "HU: Cancel"
+    assert targets1["ui_cancel_2"] == "HU: Cancel"
     # Verify placeholders preserved
     assert "{count}" in targets1["msg_items_found"] and "{location}" in targets1["msg_items_found"]
     assert "%s" in targets1["fmt_player_score"] and "%d" in targets1["fmt_player_score"]
