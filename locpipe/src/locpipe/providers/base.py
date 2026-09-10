@@ -20,7 +20,7 @@ class TranslationProvider(ABC):
 
     #: False for providers whose output must never land in the persistent
     #: TM -- currently just MockProvider. Without this, `locpipe run
-    #: --dry-run` would silently write its "[MOCK-HU] ..." placeholder
+    #: --dry-run` would silently write its "MOCK-HU: ..." placeholder
     #: text into the real, persistent TM database (same origin tags as
     #: genuine output, since commit_to_tm() has no way to tell them apart
     #: on its own), where a LATER real run's TM lookup could then reuse

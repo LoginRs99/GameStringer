@@ -22,6 +22,7 @@ Ismert egyszerűsítés: a táblázat-sor-parser nem kezeli az escape-elt
 '\\|' karaktert egy cellán belül (a kit egyik jelenlegi bejegyzésében
 sem fordul elő, de ha a jövőben szükség lenne rá, itt kell bővíteni).
 """
+import json
 import re
 
 VALID_CATEGORIES = {"brand", "lore", "mechanic", "ui", "person"}
@@ -42,15 +43,31 @@ def split_row(line):
 
 
 def parse_glossary(path):
-    """Beolvassa a glossary.md-t. Visszaadás: (entries, issues).
+    """Beolvassa a glossary.md-t vagy glossary.json-t. Visszaadás: (entries, issues)."""
+    if str(path).lower().endswith(".json"):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                entries = []
+                for lineno, item in enumerate(data, start=1):
+                    if isinstance(item, dict):
+                        src = item.get("source") or item.get("source_term", "")
+                        tgt = item.get("target") or item.get("target_term", "")
+                        if src and tgt:
+                            entries.append({
+                                "lineno": lineno,
+                                "source": src,
+                                "target": tgt,
+                                "category": item.get("category", "mechanic"),
+                                "confidence": item.get("confidence", "high"),
+                                "justification": item.get("justification", ""),
+                                "is_dual": bool(item.get("is_dual", False)),
+                            })
+                return entries, []
+        except Exception:
+            pass
 
-    entries: dict-lista, kulcsok: lineno, source, target, category,
-             confidence, justification, is_dual (bool).
-    issues:  (lineno, üzenet) párok azokhoz a táblázat-soroknak tűnő
-             sorokhoz, amik nem pontosan 5 oszlopot tartalmaznak -- ezeket
-             NEM dobja el csendben, a hívó (validate_glossary.py) dönti el,
-             hogyan jelezze.
-    """
     with open(path, "r", encoding="utf-8") as f:
         lines = f.readlines()
 

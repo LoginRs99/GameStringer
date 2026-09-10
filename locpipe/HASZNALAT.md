@@ -6,7 +6,7 @@ Ez a leírás a GameStringer és LocPipe rendszer napi használatát mutatja be 
 
 ## 1. Telepítés & Előkészületek
 
-A rendszer a Google Antigravity CLI (`agy`) motorját használja a Gemini 3.7 Flash modellel. Nincs szükség külön API kulcsok kezelésére, amennyiben a gépén már be van jelentkezve az Antigravity CLI-be.
+A rendszer a Google Antigravity CLI (`agy`) motorját használja a Gemini 3.8 Flash modellel. Nincs szükség külön API kulcsok kezelésére, amennyiben a gépén már be van jelentkezve az Antigravity CLI-be.
 
 ```bash
 # Repository gyökerében vagy a locpipe mappában:

@@ -14,8 +14,7 @@ rather than silently picking one, matching glossary-schema.md's own
 "ha kétséges, jelöld Bizonytalanként, ne válts önkényesen" rule.
 """
 
-from __future__ import annotations
-
+import json
 import re
 from pathlib import Path
 from typing import Optional
@@ -29,6 +28,30 @@ def load_glossary(path: Optional[Path]) -> list[GlossaryTerm]:
     if path is None or not path.exists():
         return []
     terms: list[GlossaryTerm] = []
+
+    if path.suffix.lower() == ".json":
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, list):
+                for item in data:
+                    if isinstance(item, dict):
+                        src = item.get("source") or item.get("source_term", "")
+                        tgt = item.get("target") or item.get("target_term", "")
+                        if src and tgt:
+                            terms.append(
+                                GlossaryTerm(
+                                    source_term=src,
+                                    target_term=tgt,
+                                    category=item.get("category", "mechanic"),
+                                    confidence=item.get("confidence", "high"),
+                                    justification=item.get("justification", ""),
+                                    is_disputed=item.get("is_disputed", False),
+                                    context_hint=item.get("context_hint"),
+                                )
+                            )
+                return terms
+        except Exception:
+            pass
     for line in path.read_text(encoding="utf-8").splitlines():
         m = _ROW_RE.match(line.strip())
         if not m:

@@ -39,7 +39,33 @@ If the source text contains gender markers like {ms|...}{fs|...}:
 - ALWAYS translate the text inside all gender slots into %%TARGET_LANG%%.
 - NEVER leave untranslated %%SOURCE_LANG%% words inside target gender slots.
 - Always preserve valid tag syntax ({ms|...}{fs|...}). Never output invalid or misspelled tag names (e.g. {mf|...}).
-- When a placeholder/tag sits adjacent to where a Hungarian case suffix or linking vowel would attach (e.g. {item}t, {item}ban), prefer rephrasing to avoid needing a suffix directly on the unknown placeholder rather than guessing a vowel-harmony-dependent ending.
+
+--- HUNGARIAN CASE SUFFIXES ON PLACEHOLDERS/TAGS ---
+Hungarian marks grammatical case with suffixes whose exact form (vowel
+harmony, linking vowel) depends on the word they attach to. A placeholder
+or protected tag standing in for runtime content (e.g. {0}, {item}) has no
+knowable vowel harmony in advance, so guessing a bare suffix produces an
+ending that will be wrong for at least some of what the game actually
+substitutes in.
+
+PRIMARY technique: a HYPHENATED suffix directly after the placeholder --
+e.g. "{0}-hoz", "{item}-t", "{0}-val/-vel" when even the connecting
+consonant is itself harmony-dependent. The hyphen signals to a Hungarian
+reader that a grammatical ending follows and reads naturally regardless of
+what fills the placeholder. Use this whenever the source needs the
+placeholder's referent in a non-nominative case (accusative, dative,
+instrumental, etc.) -- this is standard practice throughout Hungarian
+software and game localization for exactly this problem.
+
+FALLBACK: only rephrase the sentence to avoid a suffixed placeholder
+entirely when a hyphenated suffix would itself read awkwardly in context
+(colliding with punctuation, or leaving it ambiguous which word the
+suffix modifies). Rephrasing is the secondary option, not the default --
+prefer the hyphenated form first.
+
+Never glue a suffix directly onto a placeholder/tag with no hyphen (e.g.
+"{item}t", "{item}ban") -- that is exactly the guessed-vowel-harmony form
+this section exists to prevent.
 
 --- REGISTER & FORMALITY ---
 %%REGISTER_INSTRUCTION%%

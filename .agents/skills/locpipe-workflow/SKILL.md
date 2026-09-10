@@ -15,7 +15,7 @@ The complete documentation is located at `locpipe/HASZNALAT.md`.
 ## 2. Standard Workflow Checklist
 1. **Config Verification**: Inspect `locpipe/projects/<Game Name>/project.yaml`.
    - `format`: Must match the JSON/CSV adapter (`uabea_json`, `unity`, `generic_kv`, `po_gettext`).
-   - `provider.name`: `antigravity_cli` with `gemini-3.7-flash` (bulk: `low`, review: `high`).
+   - `provider.name`: `antigravity_cli` with `gemini-3.8-flash` (bulk: `low`, review: `high`).
    - `target_register`: `informal` (tegeződés).
    - `resources/lang-style.md`: Apply one of the 4 presets from `locpipe/src/locpipe/presets.py`.
    - `resources/anti-fabrication-checklist.md`: Ensure standard rules are present.
