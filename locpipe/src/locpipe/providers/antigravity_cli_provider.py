@@ -69,25 +69,39 @@ logger = logging.getLogger(__name__)
 
 
 def _cleanup_antigravity_session(temp_prompt_path: str) -> None:
-    """Removes the temporary conversation directory created in ~/.gemini/antigravity-cli/brain/
-    by Antigravity CLI for this batch chunk prompt, keeping the session list clean."""
+    """Removes the temporary conversation directory in ~/.gemini/antigravity-cli/brain/
+    AND the corresponding sqlite database in ~/.gemini/antigravity-cli/conversations/
+    created by Antigravity CLI for this batch chunk prompt, keeping the session list clean."""
     try:
-        brain_dir = Path.home() / ".gemini" / "antigravity-cli" / "brain"
-        if not brain_dir.is_dir():
-            return
+        home_cli = Path.home() / ".gemini" / "antigravity-cli"
+        brain_dir = home_cli / "brain"
+        conv_dir = home_cli / "conversations"
         temp_name = Path(temp_prompt_path).name
-        for session_dir in brain_dir.iterdir():
-            if not session_dir.is_dir():
-                continue
-            transcript = session_dir / ".system_generated" / "logs" / "transcript.jsonl"
-            if transcript.exists():
-                try:
-                    with open(transcript, "r", encoding="utf-8", errors="ignore") as f:
-                        first_line = f.readline()
-                        if temp_name in first_line:
-                            shutil.rmtree(session_dir, ignore_errors=True)
-                except Exception:
-                    pass
+
+        if brain_dir.is_dir():
+            for session_dir in list(brain_dir.iterdir()):
+                if not session_dir.is_dir():
+                    continue
+                transcript = session_dir / ".system_generated" / "logs" / "transcript.jsonl"
+                if transcript.exists():
+                    try:
+                        with open(transcript, "r", encoding="utf-8", errors="ignore") as f:
+                            first_line = f.readline()
+                            if temp_name in first_line:
+                                session_id = session_dir.name
+                                shutil.rmtree(session_dir, ignore_errors=True)
+                                if conv_dir.is_dir():
+                                    db_file = conv_dir / f"{session_id}.db"
+                                    if db_file.exists():
+                                        try:
+                                            db_file.unlink()
+                                            for extra in [conv_dir / f"{session_id}.db-wal", conv_dir / f"{session_id}.db-shm"]:
+                                                if extra.exists():
+                                                    extra.unlink()
+                                        except Exception:
+                                            pass
+                    except Exception:
+                        pass
     except Exception:
         pass
 
