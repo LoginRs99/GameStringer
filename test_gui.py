@@ -32,8 +32,11 @@ from gamestringer.desktop_gui.tabs.run_tab import RunTab
 
 @pytest.fixture
 def tk_root():
-    root = tk.Tk()
-    root.withdraw()
+    try:
+        root = tk.Tk()
+        root.withdraw()
+    except tk.TclError as e:
+        pytest.skip(f"Tkinter unavailable (headless CI without X server): {e}")
     yield root
     try:
         root.destroy()

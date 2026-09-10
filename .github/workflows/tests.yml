@@ -29,7 +29,11 @@ jobs:
 
       - name: Run pytest test suite
         run: |
-          pytest
+          if command -v xvfb-run > /dev/null 2>&1; then
+            xvfb-run pytest
+          else
+            pytest
+          fi
 
       - name: Run GameStringer utility tests
         run: |
