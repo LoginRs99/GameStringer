@@ -515,6 +515,7 @@ def _finalize_file(
 
         # 1. Low QA execution (Tier 1 QA)
         if low_items:
+            print(f"  [{path.name}] Starting QA review for {len(low_items)} flagged item(s)...")
             low_qa_calls += len(low_items)
             low_repairs = asyncio.run(
                 review_batch(

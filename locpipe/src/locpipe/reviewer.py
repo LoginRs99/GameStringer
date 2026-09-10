@@ -77,7 +77,17 @@ async def review_batch(
     # one at a time here just added idle wall-clock time on top of that for
     # no benefit, since nothing about chunk N's review depends on chunk N-1.
     chunks = [items[i : i + chunk_size] for i in range(0, len(items), chunk_size)]
-    results = await asyncio.gather(*(_review_chunk(c) for c in chunks))
+    total_chunks = len(chunks)
+    completed = 0
+
+    async def _tracked_review_chunk(idx: int, chunk: list[ReviewItem]) -> list[dict]:
+        nonlocal completed
+        repairs = await _review_chunk(chunk)
+        completed += 1
+        print(f"  [QA Review {completed}/{total_chunks}] {len(chunk)} item(s) reviewed ({len(repairs)} repaired)")
+        return repairs
+
+    results = await asyncio.gather(*(_tracked_review_chunk(idx, c) for idx, c in enumerate(chunks)))
     all_repairs: list[dict] = []
     for r in results:
         all_repairs.extend(r)
