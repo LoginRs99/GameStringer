@@ -742,7 +742,7 @@ def main(argv: list[str] | None = None) -> int:
     p_run = sub.add_parser("run", help="run the pipeline for a project")
     p_run.add_argument("--project", required=True, help="path to the project directory")
     p_run.add_argument("--dry-run", action="store_true", help="use the mock provider, no API calls")
-    p_run.add_argument("--pseudo-loc", action="store_true", help="run deterministic pseudo-localization with ~30% expansion and accented glyphs, no API calls")
+    p_run.add_argument("--pseudo-loc", action="store_true", help="run deterministic pseudo-localization with ~30%% expansion and accented glyphs, no API calls")
     p_run.add_argument("--limit", type=int, default=None, help="only process the first N batch files")
     p_run.add_argument("--sample", type=int, default=None, help="alias for --limit")
     p_run.add_argument("--max-api-calls", type=int, default=None, help="hard ceiling on total LLM API completion requests")
