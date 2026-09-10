@@ -48,11 +48,12 @@ locpipe run --project "locpipe/projects/<Project Name>" --limit 1 --max-api-call
 - Confirm control codes and tags (`{0}`, `%s`, `<ctrl:...>`, etc.) are preserved.
 - **STOP and wait for the user's explicit go-ahead** before running the full project.
 
-### Step 4: Full Project Run
-Once approved by the user, execute the full run:
-```bash
+### Step 4: Full Project Run (External Terminal Recommended)
+Once approved by the user, **advise the user to run the full execution command in an external PowerShell terminal**:
+```powershell
 locpipe run --project "locpipe/projects/<Project Name>"
 ```
+> **Important Note for Agents:** Running large multi-batch translation runs *inside* the agent's subprocess tool creates background tracker sessions for each internal CLI completion call, flooding the IDE conversation list. Direct the user to execute `locpipe run` in their external PowerShell / terminal window instead so the agent session remains clean and unflooded.
 
 ### Step 5: Post-Run Inspection
 Verify the output:

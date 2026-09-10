@@ -91,4 +91,22 @@ class MockProvider(TranslationProvider):
             ]
             return json.dumps(out, ensure_ascii=False)
 
+        # 6. Auto-discovery suggestion shape
+        if isinstance(parsed, dict) and "sample_strings" in parsed:
+            return json.dumps(
+                {
+                    "recommended_preset": "Modern, laza (kortárs akció/kaland)",
+                    "preset_rationale": "Contemporary fast-paced action fits modern gaming slang.",
+                    "glossary": [
+                        {"source": "Legion", "target": "Legion", "category": "brand", "note": "Do not translate"},
+                        {"source": "Neuron", "target": "Neuron", "category": "brand", "note": "Task force"},
+                    ],
+                    "character_voices": [
+                        {"character": "Akira", "register": "informal", "traits": "Determined and protective"}
+                    ],
+                    "suggested_path_excludes": []
+                },
+                ensure_ascii=False
+            )
+
         raise ValueError(f"MockProvider got an unrecognized payload shape: {type(parsed).__name__}")

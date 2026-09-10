@@ -24,5 +24,5 @@ The complete documentation is located at `locpipe/HASZNALAT.md`.
    - Inspect sample translated lines.
    - Confirm tag & control code preservation.
    - **STOP** and report to the user for go-ahead.
-4. **Full Execution**: On approval, run `locpipe run --project "locpipe/projects/<Game Name>"`.
+4. **Full Execution**: On approval, **direct the user to execute the full run in an external PowerShell terminal** (`locpipe run --project "locpipe/projects/<Game Name>"`). Do NOT run full unattended multi-batch jobs directly inside the agent runner to avoid flooding IDE conversation histories.
 5. **Output Check**: Inspect `batches/`, `review/full_bilingual_report.md`, and `tm/translation_memory.sqlite3`.

@@ -84,10 +84,11 @@ A sikeres próba után generáld le az erőforrás-vázlatokat:
 - Ha elégedett vagy velük, nevezd át őket végleges `glossary.md` és `character-voices.md` névre.
 
 ### 6. Lépés: Teljes fordítási futás
-Indítsd el a teljes projekt fordítását a **Run** fülön (vagy CLI-ben):
-```bash
-locpipe run --project "projects/JatekNev" --max-api-calls 500
+Indítsd el a teljes projekt fordítását a **Run** fülön, vagy külön külső **PowerShell** terminál ablakban:
+```powershell
+locpipe run --project "projects/JatekNev"
 ```
+- **Tipp:** Ha AI asszisztenst (Cursor, Antigravity, Cline) használsz a projekt beállítására, a teljes fordítást mindig a **saját külső terminálodban** futtasd le az AI chat helyett! Így elkerülhető, hogy a háttérben futó párhuzamos API hívások teleszemeteljék a chat és konverzió-előzményeket (`File Path Access Request` stb.).
 - A folyamat valós időben menti az eredményeket a `checkpoint.json`-ba és a közös Translation Memory-ba (`tm/translation_memory.sqlite3`).
 - Megszakítás esetén egyszerűen indítsd újra a parancsot: automatikusan ott folytatja, ahol abbahagyta.
 
