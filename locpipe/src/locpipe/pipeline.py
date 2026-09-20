@@ -67,7 +67,7 @@ def load_known_characters(path: Path | None) -> set[str]:
     return names
 
 
-_ID_RE = re.compile(r"id=['\"]?([^'\",:]+)['\"]?")
+_ID_RE = re.compile(r"(?:id=['\"]?([^'\",:]+)['\"]?|^\[([^\]]+)\])")
 
 
 def _attribute_issues(
@@ -77,7 +77,7 @@ def _attribute_issues(
     unattributed = ValidationResult(entry_key="<file-level>")
     for issue in file_validation.all_issues:
         m = _ID_RE.search(issue.message)
-        key = m.group(1) if m else None
+        key = (m.group(1) or m.group(2)) if m else None
         target = by_key.get(key, unattributed) if key else unattributed
         getattr(target, issue.severity.value.lower()).append(issue)
     if unattributed.all_issues:

@@ -71,8 +71,8 @@ def validate_file(
                 major.append(f"{loc}: Extra placeholder '{var}' in target (not in source)")
 
         # 3. Bracket command tags ([accent], [style=accent], etc.)
-        src_cmds = Counter(BRACKET_CMD_RE.findall(source))
-        tgt_cmds = Counter(BRACKET_CMD_RE.findall(target))
+        src_cmds = Counter(c for c in BRACKET_CMD_RE.findall(source) if not c.lower().startswith(("[reward", "[jutalom")))
+        tgt_cmds = Counter(c for c in BRACKET_CMD_RE.findall(target) if not c.lower().startswith(("[reward", "[jutalom")))
         for cmd, cnt in src_cmds.items():
             if tgt_cmds[cmd] < cnt:
                 major.append(
@@ -102,20 +102,26 @@ def validate_file(
         m_src_actor = ACTOR_PREFIX_RE.match(source)
         if m_src_actor:
             src_actor = m_src_actor.group(1)
-            m_tgt_actor = ACTOR_PREFIX_RE.match(target)
-            if not m_tgt_actor:
-                major.append(
-                    f"{loc}: Missing actor prefix '{src_actor}:' in target dialogue"
-                )
-            elif m_tgt_actor.group(1) != src_actor:
-                major.append(
-                    f"{loc}: Actor prefix changed from '{src_actor}:' to '{m_tgt_actor.group(1)}:'"
-                )
+            # Skip common non-actor UI prefixes (e.g. "Tip:", "Example:", "Exhibitionism:")
+            if src_actor.lower() not in (
+                "tip", "tipp", "example", "examples", "példa", "példák", "note", "megjegyzés",
+                "exhibitionism", "cuckolding", "exposure", "reward", "jutalom"
+            ):
+                m_tgt_actor = ACTOR_PREFIX_RE.match(target)
+                if not m_tgt_actor:
+                    major.append(
+                        f"{loc}: Missing actor prefix '{src_actor}:' in target dialogue"
+                    )
+                elif m_tgt_actor.group(1) != src_actor:
+                    major.append(
+                        f"{loc}: Actor prefix changed from '{src_actor}:' to '{m_tgt_actor.group(1)}:'"
+                    )
 
-        # 6. Glossary checks
-        if glossary:
-            glossary_issues = check_protected_terms(source, target, entry.key, glossary)
-            for g_issue in glossary_issues:
-                major.append(f"{loc}: {g_issue}")
+    # 6. Glossary checks
+    if glossary:
+        pairs = [(e.source, e.target, f"[{e.key}]") for e in entries if e.target]
+        glossary_issues = check_protected_terms(pairs, glossary)
+        for g_issue in glossary_issues:
+            major.append(g_issue)
 
     return critical, major, minor, info

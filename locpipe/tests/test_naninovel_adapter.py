@@ -152,7 +152,10 @@ def test_naninovel_validator():
 
         adapter.merge(p, entries)
 
-        critical, major, minor, info = validate_file(p)
+        glossary = [
+            {"source": "BrandName", "target": "nem fordítandó", "category": "brand", "confidence": "high", "justification": "Protected", "is_dual": False}
+        ]
+        critical, major, minor, info = validate_file(p, glossary_entries=glossary)
         assert any("Missing placeholder '{name}'" in m for m in critical)
         assert any("hianyzik a HTML/XML tag" in m for m in major)
 

@@ -73,6 +73,7 @@ def score(entry: Entry, validation: ValidationResult, config: Optional[object] =
         entry.target.strip()
         and entry.target.strip() == entry.source.strip()
         and not entry.extra.get("_expected_identity")
+        and not re.match(r"^[\W\d_]+$", entry.source.strip())
     ):
         s -= 0.4  # came back unchanged and nothing in the glossary says it should have
 
