@@ -2,6 +2,38 @@
 
 All notable changes to `locpipe` will be documented in this file.
 
+## [1.0.0] - 2026-09-20
+
+### Stable Production Release: Multilingual, Game Engine Limits & Software Mode
+
+#### Multilingual & Cross-Translation Support
+- Support for arbitrary source and target language pairs (`ja`, `en`, `hu`, `de`, `fr`, `es`, `zh`, `ko`, `it`, `pl`, `pt`, `ru`), including bidirectional translation (`ja -> hu`, `ja -> en`, `hu -> en`, `en -> hu`).
+- Language-specific formality registers: Hungarian (`informal` tegezés vs `formal` magázás), Japanese (`informal` 普通体/タメ口 vs `formal` 丁寧語/敬語), English (`informal` conversational vs `formal` professional).
+- Japanese quote balance pairing: recognizes Japanese corner brackets (`「...」`, `『...』`) and pairs them properly with Latin quotes (`"..."`, `„...”`) without false style-mismatch errors.
+- Script-aware expansion ratio heuristics: allows up to 3.5x expansion for compact Japanese Kanji source text without false low-confidence penalties.
+- Isolated Hungarian spellchecking: gated strictly to `target_lang == "hu"`.
+
+#### Game Engine Rules & Format Protections
+- Deterministic preservation for RPG Maker & Visual Novel control codes: `\C[\d+]`, `\V[\d+]`, `\N[\d+]`, `\I[\d+]`, `\G`, `\.`, `\|`, `\!`, `\^`, `\>`, `\<`, `\{`, `\}`.
+- Escaped character preservation: `\n`, `\r`, `\t`, `\\`.
+- Ruby & Furigana markup preservation: `<ruby>`, `</ruby>`, `<rt>`, `<rp>`, `[ruby]`, `[/ruby]`.
+- Smart gender slots: validates that slot syntax `{ms|...}{fs|...}` is maintained while permitting translated interior text.
+- Token multiplicity enforcement: asserts exact matching count of every formatting token in source vs target.
+- Hard physical length enforcement: triggers `MAX_LENGTH_EXCEEDED` check and feeds directly into Tier 1 mechanical shortening.
+
+#### Software Localization Mode
+- New `project_type: game | software` option.
+- Software-specific presets: "Szoftver UI / Asztali alkalmazás", "Szoftver Műszaki / Dokumentáció", "Szoftver Eszköz / CLI & Fejlesztői".
+- Dedicated software prompt section (`%%SOFTWARE_MODE_SECTION%%`) enforcing UI action verbs, brevity, and menu conventions.
+- Accelerator access key validation: preserves and shifts accelerator keys (`&File` -> `&Fájl`, `Save &As...` -> `Mentés má&sként...`).
+- Keyboard shortcut protection: ensures shortcuts like `Ctrl+S`, `Ctrl+Shift+P`, `Alt+F4` are never translated or corrupted.
+
+#### Preflight Run Safety & Hygiene
+- Startup sweep routine `sweep_orphaned_agy_artifacts()` extended to sweep orphaned `~/.gemini/antigravity-cli/conversations/<session_id>.db` databases in addition to brain directories and prompt files.
+- Safe universal defaults: default format `generic_kv`, balanced batch size `200`, safe concurrency `2`.
+
+---
+
 ## [0.18.0] - 2026-08-16
 
 Full final-review pass before treating the pipeline as ready for real

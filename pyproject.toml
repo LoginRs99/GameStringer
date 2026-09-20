@@ -30,6 +30,7 @@ packages = [
     "gamestringer.desktop_gui.tabs",
     "locpipe",
     "locpipe.adapters",
+    "locpipe.preflight",
     "locpipe.providers",
     "locpipe.validators",
 ]

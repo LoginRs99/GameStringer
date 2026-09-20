@@ -1,6 +1,6 @@
 [project]
 name = "locpipe"
-version = "0.18.0"
+version = "1.0.0"
 description = "Deterministic, multi-project localization pipeline. LLM translates and repairs; Python does everything else."
 requires-python = ">=3.10"
 dependencies = [
