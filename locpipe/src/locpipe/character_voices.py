@@ -77,7 +77,19 @@ def prune_character_voices_for_batch(
     if not rows:
         return "\n".join(preamble).strip() or "(no character voice bible provided)"
 
-    kept = [line for name, line in rows.items() if name in speakers]
+    def _matches_speaker(name: str, spkrs: set[str]) -> bool:
+        if name in spkrs:
+            return True
+        name_norm = re.sub(r"[^a-z0-9]", "", name.lower())
+        for sp in spkrs:
+            sp_norm = re.sub(r"[^a-z0-9]", "", sp.lower())
+            if name_norm == sp_norm:
+                return True
+            if len(name_norm) >= 3 and (name_norm in sp_norm or sp_norm in name_norm):
+                return True
+        return False
+
+    kept = [line for name, line in rows.items() if _matches_speaker(name, speakers)]
     if not kept:
         # category needs a voice but nobody in THIS batch matched a known
         # row -- still send the preamble/header rather than an empty
