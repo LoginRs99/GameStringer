@@ -425,7 +425,7 @@ class ProjectsTab(ttk.Frame):
         )
         r_pt.pack(side=tk.LEFT, padx=(0, 10))
 
-        self.var_format = tk.StringVar(value="uabea_json")
+        self.var_format = tk.StringVar(value="generic_kv")
         format_tooltips = (
             "Format Adapter:\n"
             "• uabea_json: Unity UABEA JSON dumps (CSV in m_Script or typetree walk)\n"
@@ -1166,7 +1166,7 @@ class ProjectsTab(ttk.Frame):
 
             self.categories_list = self.raw_config.get("categories", [
                 {"name": "dialogue", "match_speaker_present": True, "needs_character_voice": True, "batch_size": 200, "max_expansion_ratio": 1.8},
-                {"name": "ui", "default": True, "needs_character_voice": False, "batch_size": 350, "max_expansion_ratio": 1.3}
+                {"name": "ui", "default": True, "needs_character_voice": False, "batch_size": 200, "max_expansion_ratio": 1.4}
             ])
 
             for c in self.categories_list:
@@ -1234,8 +1234,8 @@ class ProjectsTab(ttk.Frame):
             }
         else:
             categories = [
-                {"name": "dialogue", "match_speaker_present": True, "needs_character_voice": True, "batch_size": 200, "max_expansion_ratio": 1.8, "effort": "high"},
-                {"name": "ui", "default": True, "needs_character_voice": False, "batch_size": 350, "max_expansion_ratio": 1.3}
+                {"name": "dialogue", "match_speaker_present": True, "needs_character_voice": True, "batch_size": 200, "max_expansion_ratio": 1.8},
+                {"name": "ui", "default": True, "needs_character_voice": False, "batch_size": 200, "max_expansion_ratio": 1.4}
             ]
             style_content = LANG_STYLE_PRESETS.get("Modern, laza (kortárs akció/kaland)", "# Language style guide\n")
             resource_files = [
@@ -1268,7 +1268,7 @@ class ProjectsTab(ttk.Frame):
                 "review_model": "gemini-3.8-flash",
                 "review_effort": "high",
                 "mode": "sync",
-                "max_concurrency": 5,
+                "max_concurrency": 2,
             },
             "format_options": {
                 "noise_filter": True,

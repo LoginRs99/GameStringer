@@ -42,9 +42,7 @@ categories:
     default: true
     needs_character_voice: false
     batch_size: 200
-    max_expansion_ratio: 1.3   # tighter: buttons/labels are the ones that actually clip
-    default_max_length: 40     # only if you know real UI limits and the format has no
-                               # native length column (e.g. Unity CSV/.po usually don't)
+    max_expansion_ratio: 1.4   # tighter: buttons/labels are the ones that actually clip
 
 provider:
   name: antigravity_cli   # antigravity_cli (default) | gemini
@@ -53,7 +51,7 @@ provider:
   review_model: gemini-3.8-flash
   review_effort: high
   mode: sync        # or "batch" for large non-urgent runs
-  max_concurrency: 5
+  max_concurrency: 2
 
 tm:
   db_path: tm/translation_memory.sqlite3
@@ -104,7 +102,7 @@ provider:
   review_model: gemini-3.8-flash
   review_effort: high
   mode: sync
-  max_concurrency: 5
+  max_concurrency: 2
 
 tm:
   db_path: tm/translation_memory.sqlite3
