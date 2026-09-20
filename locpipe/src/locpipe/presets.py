@@ -54,6 +54,23 @@ LANG_STYLE_PRESETS: dict[str, str] = {
         "## Punctuation & rhythm\n"
         "Természetes élőbeszéd ritmusa. Rövidebb, gördülékeny mondatok, emberi párbeszédek.\n"
     ),
+    "Vizuális Regény / Felnőtt (NSFW & Romantika / Eroge)": (
+        "# Language style guide\n\n"
+        "## Tone & Register\n"
+        "Érzelmes, közvetlen, érzéki és lezser vizuális regény hangvétel. "
+        "A karakterek természetes élőbeszédben, kötetlenül tegeződnek egymással (informal).\n\n"
+        "## NSFW & Erotikus nyelvezet\n"
+        "Természetes, vonzó és élvezhető magyar erotikus szókincs. Kerüld a rideg orvosi/anatómiai latin szakszavakat, "
+        "de a feleslegesen durva, alpári trágárságot is, hacsak a karakter személyisége vagy a szituáció kifejezetten nem azt kívánja. "
+        "A forrás explicitási szintjét és szenvedélyét hűen, cenzúra és prűd tompítás nélkül kell leképezni magyarra.\n\n"
+        "## Onomatopoeia & Hangutánzók\n"
+        "A sóhajok, nyögések és indulatszavak (pl. Ah..., Ngh..., Mmm..., Haah..., Eek!) érzelmi pontozása (...), "
+        "felkiáltójelei és elnyújtott magánhangzói pontosan megőrzendők. "
+        "A csillagozott zörejek/cselekvések (pl. *gulp*, *pant*, *sigh*) kontextushoz illeszkedően cselekvésleíró formában adandók vissza "
+        "(pl. *Nyel egyet*, *Liheg*, *Sóhajt*).\n\n"
+        "## Punctuation & Rhythm\n"
+        "Rövid, lüktető, dramaturgiai hatású mondatok. A gondolatjelek, három pontok és drámai szünetek szigorúan megőrzendők.\n"
+    ),
     "Szoftver UI / Asztali alkalmazás": (
         "# Language style guide\n\n"
         "## Tone\n"
