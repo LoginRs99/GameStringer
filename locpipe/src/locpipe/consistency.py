@@ -42,59 +42,77 @@ def find_consistency_issues(
             ...
         ]
     """
-    # 1. Collect unique source strings from TM records
-    unique_entries: dict[str, TMRecord] = {}
+    # 1. Group records by normalized source string to detect exact-source conflicts
+    entries_by_src: dict[str, list[TMRecord]] = {}
     for item in tm_records:
         rec = item[1] if isinstance(item, tuple) else item
         src_norm = _simple_norm(rec.source)
         if len(src_norm) < min_length or not rec.translation.strip():
             continue
-        if src_norm not in unique_entries:
-            unique_entries[src_norm] = rec
-
-    items = list(unique_entries.items())  # list of (norm_src, TMRecord)
-    if len(items) < 2:
-        return []
-
-    # Sort items by normalized length for windowed comparison
-    items.sort(key=lambda x: len(x[0]))
+        entries_by_src.setdefault(src_norm, []).append(rec)
 
     issues: list[dict] = []
-    seen_pairs: set[tuple[str, str]] = set()
+    seen_pairs: set[tuple[str, str, str, str]] = set()
 
-    # Compare items within length tolerance:
-    # If len(A) and len(B) differ by more than (1 - threshold) * max(len(A), len(B)),
-    # their difflib similarity cannot reach threshold.
-    n = len(items)
+    # Step 1: Detect identical source strings that have conflicting translations
+    unique_items: list[tuple[str, TMRecord]] = []
+    for src_norm, recs in entries_by_src.items():
+        unique_items.append((src_norm, recs[0]))
+        if len(recs) > 1:
+            first_tgt = _simple_norm(recs[0].translation)
+            for r in recs[1:]:
+                if _simple_norm(r.translation) != first_tgt:
+                    pair_key = (min(recs[0].source, r.source), max(recs[0].source, r.source),
+                                min(recs[0].translation, r.translation), max(recs[0].translation, r.translation))
+                    if pair_key not in seen_pairs:
+                        seen_pairs.add(pair_key)
+                        issues.append({
+                            'source_a': recs[0].source,
+                            'source_b': r.source,
+                            'target_a': recs[0].translation,
+                            'target_b': r.translation,
+                            'similarity': 1.0,
+                            'category_a': recs[0].category or '',
+                            'category_b': r.category or '',
+                        })
+
+    if len(unique_items) < 2:
+        return issues
+
+    # Step 2: Sort items by normalized length for windowed fuzzy comparison
+    unique_items.sort(key=lambda x: len(x[0]))
+    n = len(unique_items)
+    fuzzy_seen: set[tuple[str, str]] = set()
+
+    # Compare items within length tolerance and bounded search window to prevent CPU stall
     for i in range(n):
-        src_a_norm, rec_a = items[i]
+        src_a_norm, rec_a = unique_items[i]
         len_a = len(src_a_norm)
         max_len_b = len_a / threshold if threshold > 0 else len_a * 2
+        max_j = min(n, i + 80)
 
-        for j in range(i + 1, n):
-            src_b_norm, rec_b = items[j]
+        for j in range(i + 1, max_j):
+            src_b_norm, rec_b = unique_items[j]
             len_b = len(src_b_norm)
             if len_b > max_len_b:
                 break
 
-            # Check if targets are identical (if identical, no inconsistency)
             tgt_a_norm = _simple_norm(rec_a.translation)
             tgt_b_norm = _simple_norm(rec_b.translation)
             if tgt_a_norm == tgt_b_norm:
                 continue
 
             pair_key = (min(src_a_norm, src_b_norm), max(src_a_norm, src_b_norm))
-            if pair_key in seen_pairs:
+            if pair_key in fuzzy_seen:
                 continue
 
-            # Quick quick-ratio filter before full ratio
             matcher = difflib.SequenceMatcher(None, src_a_norm, src_b_norm)
             if matcher.quick_ratio() < threshold:
                 continue
 
             ratio = matcher.ratio()
             if ratio >= threshold:
-                seen_pairs.add(pair_key)
+                fuzzy_seen.add(pair_key)
                 issues.append({
                     'source_a': rec_a.source,
                     'source_b': rec_b.source,

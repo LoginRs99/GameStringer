@@ -391,7 +391,8 @@ class GameStringerApp:
 
         if self.tab_run.active_process and self.tab_run.active_process.poll() is None:
             try:
-                self.tab_run.active_process.terminate()
+                from gamestringer.desktop_gui.tabs.run_tab import _kill_proc_tree
+                _kill_proc_tree(self.tab_run.active_process)
             except Exception:
                 pass
 

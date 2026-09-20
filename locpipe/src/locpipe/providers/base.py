@@ -37,6 +37,7 @@ class TranslationProvider(ABC):
         *,
         max_tokens: int,
         effort: Optional[str] = None,
+        response_format: str = "json",
     ) -> str:
         """Send one request, return the raw text response. Retries,
         rate limiting, and schema validation happen one layer up in

@@ -33,6 +33,7 @@ class MockProvider(TranslationProvider):
         *,
         max_tokens: int = 8192,
         effort: Optional[str] = None,
+        response_format: str = "json",
     ) -> str:
         parsed = json.loads(user_payload)
 

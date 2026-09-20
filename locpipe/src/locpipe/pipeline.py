@@ -25,7 +25,7 @@ from .context_key import build_tm_key
 from .dedupe import commit_to_tm, enrich_and_dedupe
 from .glossary import flag_disputed_terms, flag_expected_identity_terms, load_glossary, prune_for_batch
 from .merge import merge_all
-from .models import Entry, EntryStatus, ValidationResult
+from .models import Entry, EntryStatus, Severity, ValidationIssue, ValidationResult
 from .narrative_context import attach_narrative_context
 from .normalize import content_hash, normalize_source
 from .consistency import find_consistency_issues
@@ -119,14 +119,23 @@ def _run_all_validators(
 
     for e in file_entries:
         vr = per_entry[e.key]
+        if e.target and e.max_length is not None and len(e.target) > e.max_length:
+            vr.major.append(
+                ValidationIssue(
+                    severity=Severity.MAJOR,
+                    code="MAX_LENGTH_EXCEEDED",
+                    message=f"Target text length ({len(e.target)} chars) exceeds maximum allowed limit of {e.max_length} chars.",
+                )
+            )
         for issue in audit_entry_tokens(e.source, e.target):
             if any("placeholder" in x.message.lower() or "darabszam" in x.message.lower() for x in vr.all_issues):
                 continue
             getattr(vr, issue.severity.value.lower()).append(issue)
         for issue in audit_quote_pair(e.source, e.target):
             getattr(vr, issue.severity.value.lower()).append(issue)
-        for issue in spellcheck_target(e.target, glossary_words):
-            getattr(vr, issue.severity.value.lower()).append(issue)
+        if config.target_lang.lower() in ("hu", "hungarian"):
+            for issue in spellcheck_target(e.target, glossary_words):
+                getattr(vr, issue.severity.value.lower()).append(issue)
     return per_entry
 
 
@@ -365,7 +374,16 @@ def _snapshot_before_merge(path: Path, config: ProjectConfig):
     """Save a pre-merge source snapshot for post-run integrity verification diffs."""
     snapshot_dir = config.root / "tm" / "pre_merge_snapshots"
     snapshot_dir.mkdir(parents=True, exist_ok=True)
-    snapshot_file = snapshot_dir / path.name
+    batches_dir = config.root / "batches"
+    try:
+        rel = path.relative_to(batches_dir)
+    except ValueError:
+        try:
+            rel = path.relative_to(config.root)
+        except ValueError:
+            rel = Path(path.name)
+    snapshot_file = snapshot_dir / rel
+    snapshot_file.parent.mkdir(parents=True, exist_ok=True)
     if not snapshot_file.exists() and path.exists():
         import shutil
         shutil.copy2(path, snapshot_file)
@@ -586,10 +604,7 @@ def _finalize_file(
 
         reviewed_keys = {i.entry.key for i in review_items if i.entry.status == EntryStatus.REVIEWED}
         if reviewed_keys:
-            post_review_validation = run_validator(
-                config.format, path, config.resources.get("glossary"), entry_key=str(path), format_kwargs=format_kwargs
-            )
-            post_review_per_entry = _attribute_issues(post_review_validation, file_entries)
+            post_review_per_entry = _run_all_validators(path, file_entries, config, format_kwargs)
             still_failing = 0
             for item in review_items:
                 if item.entry.key not in reviewed_keys:
@@ -706,7 +721,7 @@ def run(
     if escalation_provider is None:
         escalation_provider = review_provider
 
-    adapter = get_adapter(config.format, config.format_options)
+    adapter = get_adapter(config.format, {**config.format_options, "source_lang": config.source_lang, "target_lang": config.target_lang})
     tm = TranslationMemory(config.tm_db_path)
     glossary = load_glossary(config.resources.get("glossary"))
     known_characters = load_known_characters(config.resources.get("character_voices"))
@@ -1102,7 +1117,7 @@ def plan(config: ProjectConfig, *, limit_batches: int | None = None) -> dict:
     how much your actual duplicate ratio buys you, how many calls a
     run will really take, and a ballpark token estimate.
     """
-    adapter = get_adapter(config.format, config.format_options)
+    adapter = get_adapter(config.format, {**config.format_options, "source_lang": config.source_lang, "target_lang": config.target_lang})
     glossary = load_glossary(config.resources.get("glossary"))
     known_characters = load_known_characters(config.resources.get("character_voices"))
     checkpoint = Checkpoint(config.root / "checkpoint.json")

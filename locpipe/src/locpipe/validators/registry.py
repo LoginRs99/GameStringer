@@ -113,7 +113,11 @@ def run_validator(
             argv += ["--glossary", str(glossary_path)]
 
         proc = subprocess.run(
-            [sys.executable, str(script), *argv], capture_output=True, text=True
+            [sys.executable, str(script), *argv],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         sections = _parse_stdout_sections(proc.stdout)
         for sev_name, msgs in sections.items():
@@ -122,7 +126,16 @@ def run_validator(
                 getattr(result, sev.value.lower()).append(
                     ValidationIssue(severity=sev, code=format_name, message=msg)
                 )
-        if proc.returncode not in (0, 1):
+        if proc.returncode != 0 and not result.critical and not result.major:
+            err_msg = proc.stderr.strip() or proc.stdout.strip() or f"validator returned exit code {proc.returncode}"
+            result.critical.append(
+                ValidationIssue(
+                    severity=Severity.CRITICAL,
+                    code=format_name,
+                    message=f"validator failed (exit {proc.returncode}): {err_msg[:500]}",
+                )
+            )
+        elif proc.returncode not in (0, 1):
             result.critical.append(
                 ValidationIssue(
                     severity=Severity.CRITICAL,

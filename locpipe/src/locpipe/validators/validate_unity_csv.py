@@ -33,8 +33,16 @@ import csv
 import sys
 from collections import Counter
 
-from .glossary_terms import check_protected_terms, extract_glossary_arg, load_glossary_for_check
-from .html_tags import check_html_tags
+try:
+    from .glossary_terms import check_protected_terms, extract_glossary_arg, load_glossary_for_check
+    from .html_tags import check_html_tags
+except (ImportError, ValueError):
+    from pathlib import Path
+    _here = Path(__file__).resolve().parent
+    if str(_here) not in sys.path:
+        sys.path.insert(0, str(_here))
+    from glossary_terms import check_protected_terms, extract_glossary_arg, load_glossary_for_check
+    from html_tags import check_html_tags
 
 
 def extract_balanced_spans(text):
@@ -108,6 +116,7 @@ def main(argv):
                 f"ellenorizd, hogy nem legacy/I2 exportrol van-e szo (ld. format-unity.md)."
             )
             print(f"=== {path} ===")
+            print(f"-- CRITICAL ({len(critical)}) --")
             for item in critical:
                 print(f"  - {item}")
             return 1
@@ -119,6 +128,7 @@ def main(argv):
 
         if critical:
             print(f"=== {path} ===")
+            print(f"-- CRITICAL ({len(critical)}) --")
             for item in critical:
                 print(f"  - {item}")
             return 1

@@ -30,6 +30,29 @@ from gamestringer.desktop_gui.widgets import (
 )
 
 
+def _kill_proc_tree(proc: Optional[subprocess.Popen]) -> None:
+    if proc is None or proc.poll() is not None:
+        return
+    try:
+        if sys.platform == "win32":
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                capture_output=True,
+                timeout=5,
+            )
+        else:
+            proc.terminate()
+            try:
+                proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+
+
 class RunTab(ttk.Frame):
     def __init__(
         self,
@@ -279,6 +302,8 @@ class RunTab(ttk.Frame):
 
         self.has_run_plan_in_session = True
         self._log(f"\n=== PRE-FLIGHT PLAN: {config.project} ===\n", "cyan")
+        ptype = getattr(config, "project_type", "game").upper()
+        self._log(f"Type: {ptype} | Pair: {config.source_lang} -> {config.target_lang}\n", "muted")
         self._log(f"Provider: {config.provider.name} ({config.provider.model})\n", "muted")
         self._log(f"Raw translatable entries:  {total:,}\n")
         self._log(f"Already translated:        {already_trans:,}\n")
@@ -374,22 +399,25 @@ class RunTab(ttk.Frame):
                 env["PYTHONPATH"] = locpipe_src
 
             try:
-                self.active_process = subprocess.Popen(
+                proc = subprocess.Popen(
                     cmd,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     bufsize=1,
                     env=env
                 )
+                self.active_process = proc
 
-                for line in iter(self.active_process.stdout.readline, ''):
+                for line in iter(proc.stdout.readline, ''):
                     if not line:
                         break
                     self.root.after(0, self._handle_log_line, line)
 
-                self.active_process.wait()
-                exit_code = self.active_process.returncode
+                proc.wait()
+                exit_code = proc.returncode
                 self.root.after(0, self._on_finished, exit_code)
 
             except Exception as e:
@@ -411,13 +439,10 @@ class RunTab(ttk.Frame):
         self._log(line, tag)
 
     def _stop_execution(self):
-        if self.active_process and self.active_process.poll() is None:
-            self._log("\n⏹ Terminating process...\n", "yellow")
-            try:
-                self.active_process.terminate()
-            except Exception:
-                pass
-        self._on_finished(1)
+        proc = self.active_process
+        if proc and proc.poll() is None:
+            self._log("\n⏹ Terminating process tree...\n", "yellow")
+            _kill_proc_tree(proc)
 
     def _on_finished(self, exit_code: int):
         self.is_running = False

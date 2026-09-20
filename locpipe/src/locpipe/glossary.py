@@ -32,26 +32,51 @@ def load_glossary(path: Optional[Path]) -> list[GlossaryTerm]:
     if path.suffix.lower() == ".json":
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-            if isinstance(data, list):
-                for item in data:
-                    if isinstance(item, dict):
-                        src = item.get("source") or item.get("source_term", "")
-                        tgt = item.get("target") or item.get("target_term", "")
-                        if src and tgt:
-                            terms.append(
-                                GlossaryTerm(
-                                    source_term=src,
-                                    target_term=tgt,
-                                    category=item.get("category", "mechanic"),
-                                    confidence=item.get("confidence", "high"),
-                                    justification=item.get("justification", ""),
-                                    is_disputed=item.get("is_disputed", False),
-                                    context_hint=item.get("context_hint"),
-                                )
-                            )
-                return terms
-        except Exception:
-            pass
+        except Exception as err:
+            raise ValueError(f"Failed to parse JSON glossary '{path}': {err}") from err
+
+        raw_list = None
+        if isinstance(data, list):
+            raw_list = data
+        elif isinstance(data, dict):
+            for key in ("terms", "glossary", "entries", "items"):
+                if isinstance(data.get(key), list):
+                    raw_list = data[key]
+                    break
+
+        if raw_list is None:
+            raise ValueError(
+                f"Invalid JSON glossary format in '{path}': expected a JSON array of term objects "
+                f"or an object with a 'terms'/'glossary'/'entries' array."
+            )
+
+        for idx, item in enumerate(raw_list, start=1):
+            if not isinstance(item, dict):
+                raise ValueError(
+                    f"Invalid item #{idx} in JSON glossary '{path}': expected an object, got {type(item).__name__}"
+                )
+            src = item.get("source") or item.get("source_term", "")
+            tgt = item.get("target") or item.get("target_term", "")
+            if src and tgt:
+                justification = item.get("justification", "")
+                is_disputed = (
+                    bool(item.get("is_disputed", False))
+                    or bool(item.get("is_dual", False))
+                    or (" / " in tgt)
+                    or ("⚠" in justification)
+                )
+                terms.append(
+                    GlossaryTerm(
+                        source_term=src,
+                        target_term=tgt,
+                        category=item.get("category", "mechanic"),
+                        confidence=item.get("confidence", "high"),
+                        justification=justification,
+                        is_disputed=is_disputed,
+                        context_hint=item.get("context_hint") or (tgt if is_disputed else None),
+                    )
+                )
+        return terms
     for line in path.read_text(encoding="utf-8").splitlines():
         m = _ROW_RE.match(line.strip())
         if not m:

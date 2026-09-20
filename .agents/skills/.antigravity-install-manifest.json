@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-09-20T19:02:44.928Z",
+  "entries": [
+    "async-python-patterns",
+    "debugging-strategies",
+    "error-debugging-error-analysis",
+    "game-development",
+    "i18n-localization",
+    "llm-evaluation",
+    "prompt-engineering",
+    "prompt-engineering-patterns",
+    "prompt-injection-defense",
+    "pytest-skill",
+    "python-patterns",
+    "python-performance-optimization",
+    "python-pro",
+    "python-testing-patterns",
+    "systematic-debugging",
+    "test-driven-development",
+    "unit-testing-test-generate",
+    "unity-ai-game-creator",
+    "unity-developer",
+    "unreal-engine-cpp-pro"
+  ]
+}

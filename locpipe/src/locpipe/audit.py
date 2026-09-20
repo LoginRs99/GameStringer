@@ -71,7 +71,7 @@ def build_audit_report(config: ProjectConfig, adapter: FormatAdapter) -> dict[st
 
 
 def run_audit(config: ProjectConfig) -> dict[str, Any]:
-    adapter = get_adapter(config.format, config.format_options)
+    adapter = get_adapter(config.format, {**config.format_options, "source_lang": config.source_lang, "target_lang": config.target_lang})
     return build_audit_report(config, adapter)
 
 

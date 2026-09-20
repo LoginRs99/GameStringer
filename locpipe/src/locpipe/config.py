@@ -178,6 +178,7 @@ class ProjectConfig:
     categories: list[CategoryRule]
     provider: ProviderConfig
     tm_db_path: Path
+    project_type: str = "game"
     target_register: str = "informal"
     review_threshold: float = 0.75
     max_expansion_ratio: float = 1.6
@@ -325,10 +326,15 @@ def load_project(project_dir: str | Path) -> ProjectConfig:
         font_check_asset_path=preflight_font_raw.get("asset_path"),
     )
 
+    project_type = str(raw.get("project_type", "game")).lower().strip()
+    if project_type not in ("game", "software"):
+        project_type = "game"
+
     return ProjectConfig(
         project=raw["project"],
         source_lang=raw["source_lang"],
         target_lang=raw["target_lang"],
+        project_type=project_type,
         target_register=target_register,
         format=raw["format"],
         root=root,

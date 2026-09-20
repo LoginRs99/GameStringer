@@ -52,8 +52,10 @@ class UABEAJsonAdapter(FormatAdapter):
 
     def __init__(self, options: dict | None = None):
         super().__init__(options)
-        self.source_col_name = self.options.get("source_column", "EN")
-        self.target_col_name = self.options.get("target_column", "HU")
+        source_opt = self.options.get("source_column") or self.options.get("source_lang", "EN")
+        target_opt = self.options.get("target_column") or self.options.get("target_lang", "HU")
+        self.source_col_name = str(source_opt).upper()
+        self.target_col_name = str(target_opt).upper()
         # character_replacements: same config key as the XLIFF adapter uses.
         # Applied to every target string at merge time so the pipeline's
         # format_options.character_replacements config works for both formats.

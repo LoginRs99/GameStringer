@@ -29,6 +29,7 @@ def build_review_payload(items: list[ReviewItem], glossary: list[GlossaryTerm]) 
                 "speaker": item.entry.speaker,
                 "category": item.entry.category,
                 "issues": [i.message for i in item.validation.all_issues],
+                "confidence_flags": item.confidence_flags,
             }
         )
     return json.dumps(
@@ -52,7 +53,7 @@ async def review_batch(
         load_template("review.md"),
         source_lang=source_lang,
         target_lang=target_lang,
-        register_instruction=get_register_instruction(target_register),
+        register_instruction=get_register_instruction(target_register, target_lang=target_lang),
     )
 
     async def _review_chunk(chunk: list[ReviewItem]) -> list[dict]:

@@ -30,18 +30,24 @@ def has_suffix_near_placeholder(target: str) -> bool:
 
 def _expansion_ratio_limit(entry: Entry, config) -> float:
     """Project-wide confidence.max_expansion_ratio, overridden per-category
-    if that category set its own (see config.CategoryRule.max_expansion_ratio).
-    Falls back to 1.6 if no config was passed at all (keeps this callable
-    standalone, e.g. from a REPL or a future unit test, without requiring
-    a full ProjectConfig just to call score()).
+    if that category set its own. Respects language characteristics:
+    Japanese source strings are dense (kanji/kana), naturally expanding 2.5x-4x in Latin scripts.
     """
+    src_lang = str(getattr(config, "source_lang", "en")).lower() if config else "en"
+    tgt_lang = str(getattr(config, "target_lang", "hu")).lower() if config else "hu"
+    default_limit = 1.6
+    if src_lang in ("ja", "japanese", "jpn"):
+        default_limit = 3.5
+    elif tgt_lang in ("ja", "japanese", "jpn"):
+        default_limit = 1.1
+
     if config is None:
-        return 1.6
+        return default_limit
     if entry.category:
         for rule in config.categories:
             if rule.name == entry.category and rule.max_expansion_ratio is not None:
                 return rule.max_expansion_ratio
-    return config.max_expansion_ratio
+    return getattr(config, "max_expansion_ratio", default_limit)
 
 
 def score(entry: Entry, validation: ValidationResult, config: Optional[object] = None) -> float:
@@ -58,8 +64,10 @@ def score(entry: Entry, validation: ValidationResult, config: Optional[object] =
     if entry.extra.get("_disputed_glossary_term_used"):
         s -= 0.2  # e.g. "Network" — Hálózat/Tévéadó — needs a human or reviewer call
 
-    if entry.extra.get("_suffix_near_placeholder") or has_suffix_near_placeholder(entry.target):
-        s -= 0.2  # Hungarian case suffix attached directly to runtime placeholder
+    tgt_lang = str(getattr(config, "target_lang", "hu")).lower() if config else "hu"
+    if tgt_lang in ("hu", "hungarian"):
+        if entry.extra.get("_suffix_near_placeholder") or has_suffix_near_placeholder(entry.target):
+            s -= 0.2  # Hungarian case suffix attached directly to runtime placeholder
 
     if (
         entry.target.strip()

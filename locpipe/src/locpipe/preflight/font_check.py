@@ -64,9 +64,11 @@ def check_game_fonts(input_path: str, engine_name: str) -> Dict[str, Any]:
                 try:
                     with open(full, "r", encoding="utf-8", errors="ignore") as file_obj:
                         content = file_obj.read()
-                        if any(g in content for g in HU_GLYPHS):
+                        has_o = any(g in content for g in ("ő", "Ő", "\u0151", "\u0150"))
+                        has_u = any(g in content for g in ("ű", "Ű", "\u0171", "\u0170"))
+                        if has_o and has_u:
                             hu_glyphs_detected = True
-                        if re.search(r"\b(hu|hungarian|magyar)\b", content, re.IGNORECASE):
+                        if re.search(r"\b(hungarian|magyar)\b", content, re.IGNORECASE):
                             hu_config_detected = True
                 except Exception:
                     pass
@@ -95,17 +97,15 @@ def check_game_fonts(input_path: str, engine_name: str) -> Dict[str, Any]:
 
                             character_table = getattr(data, "m_CharacterTable", None) or getattr(data, "characterTable", None)
                             if character_table:
-                                for entry in character_table:
-                                    ascii_val = getattr(entry, "m_Unicode", getattr(entry, "unicode", 0))
-                                    if ascii_val in (337, 369, 336, 368):  # ő (337), ű (369), Ő (336), Ű (368)
-                                        hu_glyphs_detected = True
-                                        break
+                                unicodes = {getattr(entry, "m_Unicode", getattr(entry, "unicode", 0)) for entry in character_table}
+                                if 337 in unicodes and 369 in unicodes:  # ő (337) AND ű (369)
+                                    hu_glyphs_detected = True
                         except Exception:
                             pass
             except Exception:
                 pass
 
-    supported = hu_glyphs_detected or hu_config_detected
+    supported = hu_glyphs_detected
 
     if supported:
         msg = f"[INFO] Font scan result: Found {len(font_assets)} font asset(s) ({', '.join(font_assets[:5]) or 'embedded fonts'}). Hungarian ő/ű glyph support DETECTED."

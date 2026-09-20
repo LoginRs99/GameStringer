@@ -252,7 +252,7 @@ async def bootstrap_character_voices(
     )
     user_payload = json.dumps(speaker_corpora, ensure_ascii=False, indent=2)
 
-    raw_response = await provider.complete(system_prompt, user_payload, effort="high")
+    raw_response = await provider.complete(system_prompt, user_payload, effort="high", response_format="markdown")
 
     text = raw_response.strip()
     if text.startswith("```"):

@@ -102,6 +102,8 @@ def get_adapter(format_name: str, format_options: dict[str, Any] | None = None) 
                 target_column_names=opts.get("target_column_names"),
                 source_column_names=opts.get("source_column_names"),
                 max_length_column_names=opts.get("max_length_column_names"),
+                source_lang=opts.get("source_lang"),
+                target_lang=opts.get("target_lang"),
             )
         return _CONFIGURABLE_REGISTRY[format_name]()
     if format_name in _NOT_YET_PORTED:

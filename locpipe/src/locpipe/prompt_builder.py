@@ -37,21 +37,55 @@ def fill(template: str, **values: str) -> str:
     return template
 
 
-def get_register_instruction(target_register: str = "informal") -> str:
-    """Return explicit instruction for Hungarian formality register (tegez/magáz),
+def get_register_instruction(target_register: str = "informal", target_lang: str = "hu") -> str:
+    """Return explicit instruction for target language formality register,
     noting that character voice bibles override the project default for specific characters.
     """
-    if str(target_register).lower() == "formal":
+    lang = str(target_lang).lower()
+    is_formal = str(target_register).lower() == "formal"
+
+    if lang in ("hu", "hungarian"):
+        if is_formal:
+            return (
+                "Address the player formally throughout (magázódás — use 'Ön'/'Maga' forms, not 'te'), "
+                "consistently across all UI, narration, and dialogue, UNLESS a specific character's voice "
+                "entry in the character bible explicitly overrides this for their own lines."
+            )
         return (
-            "Address the player formally throughout (magázódás — use 'Ön'/'Maga' forms, not 'te'), "
+            "Address the player informally throughout (tegeződés — use 'te' forms, not 'Ön'), "
             "consistently across all UI, narration, and dialogue, UNLESS a specific character's voice "
             "entry in the character bible explicitly overrides this for their own lines."
         )
-    return (
-        "Address the player informally throughout (tegeződés — use 'te' forms, not 'Ön'), "
-        "consistently across all UI, narration, and dialogue, UNLESS a specific character's voice "
-        "entry in the character bible explicitly overrides this for their own lines."
-    )
+
+    if lang in ("ja", "japanese", "jpn"):
+        if is_formal:
+            return (
+                "Use polite/formal Japanese register (丁寧語・敬語 — です/ます体) throughout all UI, narration, "
+                "and dialogue, UNLESS a specific character's voice entry in the character bible explicitly "
+                "overrides this with informal speech (タメ口) or a specific persona dialect."
+            )
+        return (
+            "Use natural casual/informal Japanese register (普通体 — だ/である体 or conversational タメ口) "
+            "throughout UI and dialogue, UNLESS a specific character's voice entry in the character bible "
+            "explicitly requires formal honorific speech (敬語/丁寧語)."
+        )
+
+    if lang in ("en", "english"):
+        if is_formal:
+            return (
+                "Maintain a formal, professional English register throughout, avoiding contractions and colloquial slang, "
+                "consistently across all UI, narration, and dialogue, UNLESS a specific character's voice "
+                "entry in the character bible explicitly overrides this."
+            )
+        return (
+            "Maintain a natural, idiomatic and conversational English register throughout, using contractions where natural, "
+            "consistently across all UI, narration, and dialogue, UNLESS a specific character's voice "
+            "entry in the character bible explicitly overrides this."
+        )
+
+    if is_formal:
+        return f"Maintain a formal and respectful register in {target_lang} throughout, unless overridden by a character voice entry."
+    return f"Maintain a natural, informal and conversational register in {target_lang} throughout, unless overridden by a character voice entry."
 
 
 def toggle_section(template: str, start_marker: str, end_marker: str, *, keep: bool) -> str:

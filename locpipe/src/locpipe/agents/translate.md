@@ -40,32 +40,27 @@ If the source text contains gender markers like {ms|...}{fs|...}:
 - NEVER leave untranslated %%SOURCE_LANG%% words inside target gender slots.
 - Always preserve valid tag syntax ({ms|...}{fs|...}). Never output invalid or misspelled tag names (e.g. {mf|...}).
 
---- HUNGARIAN CASE SUFFIXES ON PLACEHOLDERS/TAGS ---
-Hungarian marks grammatical case with suffixes whose exact form (vowel
-harmony, linking vowel) depends on the word they attach to. A placeholder
-or protected tag standing in for runtime content (e.g. {0}, {item}) has no
-knowable vowel harmony in advance, so guessing a bare suffix produces an
-ending that will be wrong for at least some of what the game actually
-substitutes in.
+--- TARGET LANGUAGE RULES FOR PLACEHOLDERS, PARTICLES & TAGS ---
+- If target language is Hungarian (hu):
+  Hungarian marks grammatical case with suffixes whose exact form (vowel harmony, linking vowel) depends on the word they attach to. Use a HYPHENATED suffix directly after the placeholder (e.g. "{0}-hoz", "{item}-t", "{0}-val/-vel"). Never glue a suffix directly onto a placeholder/tag with no hyphen (e.g. "{item}t", "{item}ban").
+- If target language is Japanese (ja):
+  Japanese attaches particles (は, が, を, に, で, へ, と, から, まで, の) naturally after placeholders (e.g. "{0}を", "{player}の").
+  Preserve all code tags, placeholders ({0}, %s, etc.), and control codes in exact half-width ASCII.
+  Convert dialogue quotes to standard Japanese corner brackets 「...」 and book/title brackets 『...』.
+- If target language is English (en):
+  Preserve standard English word order, prepositions, and plural markers (e.g. "{0} items", "{item}s").
+- If source language is Japanese (ja):
+  Japanese corner brackets 「...」 must be localized to appropriate quotation marks in the target language ("..." or „...”).
+  Preserve game engine escape codes (\n, \C[...], \V[...], etc.) and ruby annotations accurately.
 
-PRIMARY technique: a HYPHENATED suffix directly after the placeholder --
-e.g. "{0}-hoz", "{item}-t", "{0}-val/-vel" when even the connecting
-consonant is itself harmony-dependent. The hyphen signals to a Hungarian
-reader that a grammatical ending follows and reads naturally regardless of
-what fills the placeholder. Use this whenever the source needs the
-placeholder's referent in a non-nominative case (accusative, dative,
-instrumental, etc.) -- this is standard practice throughout Hungarian
-software and game localization for exactly this problem.
-
-FALLBACK: only rephrase the sentence to avoid a suffixed placeholder
-entirely when a hyphenated suffix would itself read awkwardly in context
-(colliding with punctuation, or leaving it ambiguous which word the
-suffix modifies). Rephrasing is the secondary option, not the default --
-prefer the hyphenated form first.
-
-Never glue a suffix directly onto a placeholder/tag with no hyphen (e.g.
-"{item}t", "{item}ban") -- that is exactly the guessed-vowel-harmony form
-this section exists to prevent.
+%%SOFTWARE_MODE_SECTION_START%%
+--- SOFTWARE LOCALIZATION RULES ---
+This project is a software application. Follow standard software localization practices:
+- UI Action verbs & Buttons: For buttons, menus, and commands, use standard software conventions (e.g. for Hungarian, use standard infinitive/short noun forms like "Mentés", "Megnyitás", "Bezárás", "Törlés", "Mégse", "Alkalmaz"; for English, base imperative forms like "Save", "Open", "Close", "Delete", "Cancel", "Apply").
+- Access Keys / Accelerators: If source contains an access key ampersand (e.g. "&File", "&Open", "Save &As..."), place an access key ampersand "&" before an appropriate mnemonic letter in the target translation (e.g. "&Fájl", "&Megnyitás", "Mentés má&sként...").
+- Keyboard shortcuts: Preserve keyboard shortcuts (e.g. Ctrl+S, Alt+F4, Shift+Tab, Cmd+P) exactly as formatted in the source.
+- Dialogues and Status messages: Ensure confirmation questions and error messages are clear, technical, and grammatically precise.
+%%SOFTWARE_MODE_SECTION_END%%
 
 --- REGISTER & FORMALITY ---
 %%REGISTER_INSTRUCTION%%

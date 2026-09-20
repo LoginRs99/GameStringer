@@ -39,7 +39,19 @@ def snapshot_tm(config) -> Path:
     backups_dir.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y%m%dT%H%M%S")
     backup_path = backups_dir / f"{tm_path.stem}.{stamp}.bak{tm_path.suffix}"
-    shutil.copy2(tm_path, backup_path)
+    try:
+        import sqlite3
+        with sqlite3.connect(str(tm_path)) as src_conn, sqlite3.connect(str(backup_path)) as dst_conn:
+            src_conn.backup(dst_conn)
+    except Exception as err:
+        logger.warning("sqlite3.backup failed (%s), falling back to copy2", err)
+        shutil.copy2(tm_path, backup_path)
+        wal = tm_path.with_name(tm_path.name + "-wal")
+        if wal.exists():
+            try:
+                shutil.copy2(wal, backup_path.with_name(backup_path.name + "-wal"))
+            except OSError:
+                pass
     logger.info("TM snapshot written to %s", backup_path)
     return backup_path
 
@@ -73,16 +85,53 @@ def sweep_orphaned_agy_artifacts(max_age_s: int = 3600) -> Dict[str, int]:
             pass
 
     removed_sessions = 0
-    brain_dir = Path.home() / ".gemini" / "antigravity-cli" / "brain"
+    removed_dbs = 0
+    home_cli = Path.home() / ".gemini" / "antigravity-cli"
+    brain_dir = home_cli / "brain"
+    conv_dir = home_cli / "conversations"
+
     if brain_dir.is_dir():
         for session_dir in brain_dir.iterdir():
             if not session_dir.is_dir():
                 continue
             try:
                 if time.time() - session_dir.stat().st_mtime > max_age_s:
+                    session_id = session_dir.name
                     shutil.rmtree(session_dir, ignore_errors=True)
                     removed_sessions += 1
+
+                    if conv_dir.is_dir():
+                        db_file = conv_dir / f"{session_id}.db"
+                        if db_file.exists():
+                            try:
+                                db_file.unlink()
+                                removed_dbs += 1
+                                for extra in [conv_dir / f"{session_id}.db-wal", conv_dir / f"{session_id}.db-shm"]:
+                                    if extra.exists():
+                                        extra.unlink()
+                            except OSError:
+                                pass
             except OSError:
                 pass
 
-    return {"removed_temp_files": removed_temp_files, "removed_sessions": removed_sessions}
+    if conv_dir.is_dir():
+        for db_file in conv_dir.glob("*.db"):
+            try:
+                if time.time() - db_file.stat().st_mtime > max_age_s:
+                    session_id = db_file.stem
+                    db_file.unlink()
+                    removed_dbs += 1
+                    for extra in [conv_dir / f"{session_id}.db-wal", conv_dir / f"{session_id}.db-shm"]:
+                        if extra.exists():
+                            try:
+                                extra.unlink()
+                            except OSError:
+                                pass
+            except OSError:
+                pass
+
+    return {
+        "removed_temp_files": removed_temp_files,
+        "removed_sessions": removed_sessions,
+        "removed_conversation_dbs": removed_dbs,
+    }

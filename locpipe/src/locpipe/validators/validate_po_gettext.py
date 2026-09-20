@@ -236,13 +236,13 @@ def main(argv):
     any_bad = False
     for path in argv:
         print(f"=== {path} ===")
-        critical, major, info = validate_file(path, glossary_entries)
-        for label, items in (("CRITICAL", critical), ("MAJOR", major), ("INFO", info)):
+        critical, major, minor, info = validate_file(path, glossary_entries)
+        for label, items in (("CRITICAL", critical), ("MAJOR", major), ("MINOR", minor), ("INFO", info)):
             if items:
                 print(f"-- {label} ({len(items)}) --")
                 for item in items:
                     print(f"  - {item}")
-        if not (critical or major or info):
+        if not (critical or major or minor or info):
             print("  Nincs eszlelt problema.")
         if critical or major:
             any_bad = True

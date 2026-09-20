@@ -216,6 +216,111 @@ class CategoryEditDialog(tk.Toplevel):
         self.destroy()
 
 
+class NewProjectDialog(tk.Toplevel):
+    """Modal dialog to create a new localization project (Game or Software)."""
+
+    def __init__(self, parent: tk.Widget, projects_dir: Path):
+        super().__init__(parent)
+        self.title("New Localization Project")
+        self.geometry("480x360")
+        self.resizable(False, False)
+        self.configure(bg=BG_BASE)
+        self.transient(parent.winfo_toplevel())
+        self.grab_set()
+
+        self.projects_dir = projects_dir
+        self.result: Optional[Dict[str, Any]] = None
+
+        self._build_ui()
+        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
+        self.center_window()
+
+    def center_window(self):
+        self.update_idletasks()
+        w = self.winfo_width()
+        h = self.winfo_height()
+        parent_x = self.master.winfo_rootx()
+        parent_y = self.master.winfo_rooty()
+        parent_w = self.master.winfo_width()
+        parent_h = self.master.winfo_height()
+        x = parent_x + max(0, (parent_w - w) // 2)
+        y = parent_y + max(0, (parent_h - h) // 2)
+        self.geometry(f"+{x}+{y}")
+
+    def _build_ui(self):
+        container = ttk.Frame(self, style="TFrame", padding=15)
+        container.pack(fill=tk.BOTH, expand=True)
+
+        form = ttk.Labelframe(container, text=" Project Setup ", style="TLabelframe", padding=12)
+        form.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
+
+        self.var_name = tk.StringVar(value="")
+        r_n, self.entry_name = labeled_entry(form, "Project Name:", self.var_name, width=22, label_width=15,
+                                             tooltip="Directory name for this project (e.g. MyGame or MyApp)")
+        r_n.pack(fill=tk.X, pady=4)
+
+        self.var_type = tk.StringVar(value="game")
+        r_t, _ = labeled_combo(form, "Project Type:", self.var_type, values=["game", "software"],
+                               width=20, label_width=15, state="readonly",
+                               tooltip="Game (dialogue, narrative, UI, character voices) or Software (desktop/web UI, action verbs, menus, access keys)")
+        r_t.pack(fill=tk.X, pady=4)
+
+        self.var_format = tk.StringVar(value="generic_kv")
+        r_f, _ = labeled_combo(form, "Format Adapter:", self.var_format,
+                               values=["generic_kv", "uabea_json", "unity", "po_gettext", "ue4_5_po", "xliff"],
+                               width=20, label_width=15, state="readonly",
+                               tooltip="File format adapter for batch extraction & merge")
+        r_f.pack(fill=tk.X, pady=4)
+
+        common_langs = ["en", "ja", "hu", "de", "fr", "es", "zh", "ko", "it", "pl", "pt", "ru"]
+        r_l = ttk.Frame(form, style="Card.TFrame")
+        r_l.pack(fill=tk.X, pady=4)
+
+        self.var_src = tk.StringVar(value="en")
+        r_s, _ = labeled_combo(r_l, "Source Lang:", self.var_src, values=common_langs, width=6, label_width=15,
+                               tooltip="Source language code (e.g. en, ja, hu)")
+        r_s.pack(side=tk.LEFT, padx=(0, 10))
+
+        self.var_tgt = tk.StringVar(value="hu")
+        r_tg, _ = labeled_combo(r_l, "Target Lang:", self.var_tgt, values=common_langs, width=6, label_width=11,
+                                tooltip="Target language code (e.g. hu, en, ja)")
+        r_tg.pack(side=tk.LEFT)
+
+        btn_box = ttk.Frame(container, style="TFrame")
+        btn_box.pack(fill=tk.X)
+
+        btn_cancel = action_button(btn_box, "Cancel", self._on_cancel)
+        btn_cancel.pack(side=tk.RIGHT, padx=(5, 0))
+
+        btn_save = action_button(btn_box, "✓ Create Project", self._on_create, style="Action.TButton")
+        btn_save.pack(side=tk.RIGHT)
+
+        self.entry_name.focus_set()
+
+    def _on_create(self):
+        name = self.var_name.get().strip()
+        if not name:
+            messagebox.showwarning("Missing Name", "Project name cannot be empty.", parent=self)
+            return
+        proj_dir = self.projects_dir / name
+        if proj_dir.exists():
+            messagebox.showwarning("Already Exists", f"Project '{name}' already exists.", parent=self)
+            return
+
+        self.result = {
+            "name": name,
+            "type": self.var_type.get(),
+            "format": self.var_format.get(),
+            "source_lang": self.var_src.get().strip() or "en",
+            "target_lang": self.var_tgt.get().strip() or "hu",
+        }
+        self.destroy()
+
+    def _on_cancel(self):
+        self.result = None
+        self.destroy()
+
+
 class ProjectsTab(ttk.Frame):
     def __init__(
         self,
@@ -300,16 +405,25 @@ class ProjectsTab(ttk.Frame):
 
         form = self.scrollable_form
 
-        # Row 1: Project Name & Format
+        # Row 1: Project Name, Type & Format
         r1 = ttk.Frame(form, style="Card.TFrame")
         r1.pack(fill=tk.X, pady=4)
 
         self.var_name = tk.StringVar()
         _, self.entry_name = labeled_entry(
-            r1, "Project Name:", self.var_name, readonly=True, width=22, label_width=15,
+            r1, "Project Name:", self.var_name, readonly=True, width=18, label_width=13,
             tooltip="Name of the project directory under locpipe/projects/"
         )
-        r1.children["!frame"].pack(side=tk.LEFT, padx=(0, 15))
+        r1.children["!frame"].pack(side=tk.LEFT, padx=(0, 10))
+
+        self.var_project_type = tk.StringVar(value="game")
+        r_pt, self.combo_type = labeled_combo(
+            r1, "Type:", self.var_project_type,
+            values=["game", "software"],
+            width=9, label_width=6, state="readonly",
+            tooltip="Project localization type:\n• game: Dialogue, narrative, UI, character voices, gaming style presets\n• software: Desktop/web UI, action verbs, menus, access keys (&), shortcuts"
+        )
+        r_pt.pack(side=tk.LEFT, padx=(0, 10))
 
         self.var_format = tk.StringVar(value="uabea_json")
         format_tooltips = (
@@ -324,7 +438,7 @@ class ProjectsTab(ttk.Frame):
         r_fmt, self.combo_format = labeled_combo(
             r1, "Format Adapter:", self.var_format,
             values=["uabea_json", "unity", "po_gettext", "ue4_5_po", "generic_kv", "xliff", "weblate_xliff"],
-            width=18, label_width=15, tooltip=format_tooltips
+            width=16, label_width=13, tooltip=format_tooltips
         )
         r_fmt.pack(side=tk.LEFT)
 
@@ -332,14 +446,16 @@ class ProjectsTab(ttk.Frame):
         r2 = ttk.Frame(form, style="Card.TFrame")
         r2.pack(fill=tk.X, pady=4)
 
+        common_langs = ["en", "ja", "hu", "de", "fr", "es", "zh", "ko", "it", "pl", "pt", "ru"]
+
         self.var_source_lang = tk.StringVar(value="en")
-        r_sl, _ = labeled_entry(r2, "Source Lang:", self.var_source_lang, width=6, label_width=15,
-                                tooltip="Source language code (e.g. en)")
+        r_sl, _ = labeled_combo(r2, "Source Lang:", self.var_source_lang, values=common_langs, width=6, label_width=13,
+                                tooltip="Source language code (e.g. en, ja, hu)")
         r_sl.pack(side=tk.LEFT, padx=(0, 10))
 
         self.var_target_lang = tk.StringVar(value="hu")
-        r_tl, _ = labeled_entry(r2, "Target Lang:", self.var_target_lang, width=6, label_width=11,
-                                tooltip="Target language code (e.g. hu)")
+        r_tl, _ = labeled_combo(r2, "Target Lang:", self.var_target_lang, values=common_langs, width=6, label_width=11,
+                                tooltip="Target language code (e.g. hu, en, ja)")
         r_tl.pack(side=tk.LEFT, padx=(0, 10))
 
         self.var_target_register = tk.StringVar(value="informal")
@@ -892,7 +1008,7 @@ class ProjectsTab(ttk.Frame):
 
     def _bind_dirty_events(self):
         for var in [
-            self.var_source_lang, self.var_target_lang, self.var_target_register, self.var_format,
+            self.var_project_type, self.var_source_lang, self.var_target_lang, self.var_target_register, self.var_format,
             self.var_batch_glob, self.var_noise_filter, self.var_char_replacements,
             self.var_prov_model, self.var_prov_effort,
             self.var_prov_review_model, self.var_prov_review_effort,
@@ -1012,6 +1128,7 @@ class ProjectsTab(ttk.Frame):
         self._suppress_dirty = True
         try:
             self.var_name.set(self.raw_config.get("project", name))
+            self.var_project_type.set(self.raw_config.get("project_type", "game"))
             self.var_source_lang.set(self.raw_config.get("source_lang", "en"))
             self.var_target_lang.set(self.raw_config.get("target_lang", "hu"))
             self.var_target_register.set(self.raw_config.get("target_register", "informal"))
@@ -1079,35 +1196,71 @@ class ProjectsTab(ttk.Frame):
         if not self.check_unsaved_changes():
             return
 
-        name = simpledialog.askstring("New Project", "Enter project name (e.g. MyGame):", parent=self.root)
-        if not name:
-            return
-        name = name.strip()
-        proj_dir = self.projects_dir / name
-        if proj_dir.exists():
-            messagebox.showwarning("Exists", f"Project '{name}' already exists.")
+        dialog = NewProjectDialog(self.root, self.projects_dir)
+        self.wait_window(dialog)
+        if not dialog.result:
             return
 
+        name = dialog.result["name"]
+        ptype = dialog.result.get("type", "game")
+        fmt = dialog.result.get("format", "generic_kv")
+        src = dialog.result.get("source_lang", "en")
+        tgt = dialog.result.get("target_lang", "hu")
+
+        proj_dir = self.projects_dir / name
         (proj_dir / "batches").mkdir(parents=True, exist_ok=True)
         (proj_dir / "resources").mkdir(parents=True, exist_ok=True)
 
-        template_yaml = {
-            "project": name,
-            "source_lang": "en",
-            "target_lang": "hu",
-            "target_register": "informal",
-            "format": "uabea_json",
-            "batches": {"glob": "batches/*.json"},
-            "resources": {
+        from locpipe.presets import LANG_STYLE_PRESETS
+        from locpipe.bootstrap import ANTI_FABRICATION_DEFAULT
+
+        if ptype == "software":
+            categories = [
+                {"name": "action", "batch_size": 200, "max_expansion_ratio": 1.4, "default_max_length": 35},
+                {"name": "menu", "batch_size": 200, "max_expansion_ratio": 1.4},
+                {"name": "dialog", "batch_size": 150, "max_expansion_ratio": 1.8},
+                {"name": "ui", "default": True, "batch_size": 200, "max_expansion_ratio": 1.5}
+            ]
+            style_content = LANG_STYLE_PRESETS.get("Szoftver UI / Asztali alkalmazás", "# Language style guide\n")
+            resource_files = [
+                ("glossary.md", "# Glossary\n\n| Source term | Target translation | Category | Confidence | Source/justification |\n|---|---|---|---|---|\n| OK | OK | ui | high | standard UI |\n| Cancel | Mégse | ui | high | standard UI |\n| Save | Mentés | ui | high | standard UI |\n| Open | Megnyitás | ui | high | standard UI |\n"),
+                ("lang-style.md", style_content),
+                ("anti-fabrication-checklist.md", ANTI_FABRICATION_DEFAULT),
+            ]
+            resources_cfg = {
+                "glossary": "resources/glossary.md",
+                "lang_style": "resources/lang-style.md",
+                "anti_fabrication_checklist": "resources/anti-fabrication-checklist.md",
+            }
+        else:
+            categories = [
+                {"name": "dialogue", "match_speaker_present": True, "needs_character_voice": True, "batch_size": 200, "max_expansion_ratio": 1.8, "effort": "high"},
+                {"name": "ui", "default": True, "needs_character_voice": False, "batch_size": 350, "max_expansion_ratio": 1.3}
+            ]
+            style_content = LANG_STYLE_PRESETS.get("Modern, laza (kortárs akció/kaland)", "# Language style guide\n")
+            resource_files = [
+                ("glossary.md", "# Glossary\n\n| Source term | Target translation | Category | Confidence | Source/justification |\n|---|---|---|---|---|\n"),
+                ("lang-style.md", style_content),
+                ("character-voices.md", "# Character voice bible\n\n| Character | Register | Traits | Avoid |\n|---|---|---|---|\n"),
+                ("anti-fabrication-checklist.md", ANTI_FABRICATION_DEFAULT),
+            ]
+            resources_cfg = {
                 "glossary": "resources/glossary.md",
                 "lang_style": "resources/lang-style.md",
                 "character_voices": "resources/character-voices.md",
                 "anti_fabrication_checklist": "resources/anti-fabrication-checklist.md",
-            },
-            "categories": [
-                {"name": "dialogue", "match_speaker_present": True, "needs_character_voice": True, "batch_size": 200, "max_expansion_ratio": 1.8, "effort": "high"},
-                {"name": "ui", "default": True, "needs_character_voice": False, "batch_size": 350, "max_expansion_ratio": 1.3}
-            ],
+            }
+
+        template_yaml = {
+            "project": name,
+            "project_type": ptype,
+            "source_lang": src,
+            "target_lang": tgt,
+            "target_register": "informal",
+            "format": fmt,
+            "batches": {"glob": "batches/*.json"},
+            "resources": resources_cfg,
+            "categories": categories,
             "provider": {
                 "name": "antigravity_cli",
                 "model": "gemini-3.8-flash",
@@ -1132,21 +1285,8 @@ class ProjectsTab(ttk.Frame):
 
         (proj_dir / "project.yaml").write_text(yaml.dump(template_yaml, sort_keys=False, allow_unicode=True), encoding="utf-8")
 
-        for fname, header in [
-            ("glossary.md", "# Glossary\n\n| Source term | Target translation | Category | Confidence | Source/justification |\n|---|---|---|---|---|\n"),
-            ("lang-style.md", "# Language style guide\n"),
-            ("character-voices.md", "# Character voice bible\n\n| Character | Register | Traits | Avoid |\n|---|---|---|---|\n"),
-            ("anti-fabrication-checklist.md", (
-                "# Anti-fabrication checklist\n"
-                "Never invent numbers, names, or quantities not present in the source.\n"
-                "Never drop content present in the source without a clear formatting reason.\n\n"
-                "This is about content, not sentence shape: restructuring word order, splitting or joining clauses, "
-                "or moving a preverb for natural Hungarian focus (see lang-style.md) is not fabrication or dropped content "
-                "as long as the same information survives. Judge by meaning preserved, not by how closely the sentence "
-                "structure mirrors the source.\n"
-            )),
-        ]:
-            (proj_dir / "resources" / fname).write_text(header, encoding="utf-8")
+        for fname, content in resource_files:
+            (proj_dir / "resources" / fname).write_text(content, encoding="utf-8")
 
         self.refresh_project_list()
         self.select_project(name)
@@ -1246,6 +1386,7 @@ class ProjectsTab(ttk.Frame):
 
         cfg = dict(self.raw_config) if self.raw_config else {}
         cfg["project"] = self.var_name.get()
+        cfg["project_type"] = self.var_project_type.get().strip() or "game"
         cfg["source_lang"] = self.var_source_lang.get()
         cfg["target_lang"] = self.var_target_lang.get()
         cfg["target_register"] = self.var_target_register.get().strip() or "informal"

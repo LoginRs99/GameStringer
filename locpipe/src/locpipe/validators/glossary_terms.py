@@ -48,25 +48,49 @@ def parse_glossary(path):
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            if isinstance(data, list):
-                entries = []
-                for lineno, item in enumerate(data, start=1):
-                    if isinstance(item, dict):
-                        src = item.get("source") or item.get("source_term", "")
-                        tgt = item.get("target") or item.get("target_term", "")
-                        if src and tgt:
-                            entries.append({
-                                "lineno": lineno,
-                                "source": src,
-                                "target": tgt,
-                                "category": item.get("category", "mechanic"),
-                                "confidence": item.get("confidence", "high"),
-                                "justification": item.get("justification", ""),
-                                "is_dual": bool(item.get("is_dual", False)),
-                            })
-                return entries, []
-        except Exception:
-            pass
+        except Exception as err:
+            return [], [(1, f"Érvénytelen JSON szintaxis a szószedetben ({path}): {err}")]
+
+        raw_list = None
+        if isinstance(data, list):
+            raw_list = data
+        elif isinstance(data, dict):
+            for key in ("terms", "glossary", "entries", "items"):
+                if isinstance(data.get(key), list):
+                    raw_list = data[key]
+                    break
+
+        if raw_list is None:
+            return [], [(1, f"Érvénytelen JSON szószedet formátum ({path}): várt egy JSON lista vagy egy objektum 'terms'/'glossary'/'entries' listával.")]
+
+        entries = []
+        issues = []
+        for lineno, item in enumerate(raw_list, start=1):
+            if not isinstance(item, dict):
+                issues.append((lineno, f"A szószedet #{lineno}. eleme nem objektum (dict): {item!r}"))
+                continue
+            src = item.get("source") or item.get("source_term", "")
+            tgt = item.get("target") or item.get("target_term", "")
+            justification = item.get("justification", "")
+            is_dual = (
+                bool(item.get("is_dual", False))
+                or bool(item.get("is_disputed", False))
+                or (DUAL_MARKER in justification)
+                or (" / " in tgt)
+            )
+            if not src or not tgt:
+                issues.append((lineno, f"Hiányzó 'source' vagy 'target' a(z) #{lineno}. szószedet-bejegyzésben: {item!r}"))
+                continue
+            entries.append({
+                "lineno": lineno,
+                "source": src,
+                "target": tgt,
+                "category": item.get("category", "mechanic"),
+                "confidence": item.get("confidence", "high"),
+                "justification": justification,
+                "is_dual": is_dual,
+            })
+        return entries, issues
 
     with open(path, "r", encoding="utf-8") as f:
         lines = f.readlines()
@@ -207,12 +231,16 @@ def extract_glossary_arg(argv):
 
 
 def load_glossary_for_check(path):
-    """Kényelmi függvény: beolvassa a glossary.md-t és visszaadja az
+    """Kényelmi függvény: beolvassa a glossary.md-t vagy glossary.json-t és visszaadja az
     entries listát a check_protected_terms()-hez. Ha a fájl hiányzik
     vagy üres, üres listát ad vissza -- ez NEM hiba (lehet, hogy a
     glossary-researcher még nem futott le), csak nincs mit ellenőrizni."""
+    if not path:
+        return []
     try:
-        entries, _ = parse_glossary(path)
+        entries, issues = parse_glossary(path)
+        if str(path).lower().endswith(".json") and issues and not entries:
+            raise ValueError(f"Failed to load JSON glossary '{path}': {issues[0][1]}")
         return entries
     except OSError:
         return []

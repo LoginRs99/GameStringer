@@ -11,13 +11,14 @@ from .pipeline import plan, run
 from .preflight.font_check import apply_hungarian_fallback_if_needed
 from .preflight.run_safety import snapshot_tm, sweep_orphaned_agy_artifacts
 
-_INIT_TEMPLATE = """\
+_INIT_GAME_TEMPLATE = """\
 project: {name}
-source_lang: en
-target_lang: hu
+project_type: game
+source_lang: {source_lang}
+target_lang: {target_lang}
 target_register: informal   # informal (tegez — default) | formal (magáz)
 
-format: generic_kv   # ported: generic_kv, po_gettext, ue4_5_po (Unreal Localization
+format: {format}   # ported: generic_kv, po_gettext, ue4_5_po (Unreal Localization
                      # Dashboard .po export), unity (official Localization Package CSV
                      # export), uabea_json (UABEA asset-dump export), xliff/weblate_xliff
                      # -- see locpipe/adapters/registry.py for details on each
@@ -37,53 +38,21 @@ categories:
     needs_character_voice: true
     batch_size: 200
     max_expansion_ratio: 1.8   # dialogue usually has room to run a bit longer
-  # Uncomment for a ue4_5_po project: routes Unreal's {{Arg}}|plural(...)/
-  # gender(...)/ordinal(...) argument-modifier syntax to its own category
-  # BEFORE the dialogue/ui rules below get a chance to claim it, since a
-  # smaller batch_size here means fewer of these structurally-sensitive
-  # entries share a single LLM call/failure -- see validators/
-  # validate_ue4_5_po.py for the mechanical check that runs on these either
-  # way, but keeping the batch small limits the blast radius of one bad
-  # response and makes them easier to spot-check by hand if flagged.
-  # - name: format_sensitive
-  #   match_source_regex: '\\|(plural|gender|ordinal)\\('
-  #   batch_size: 80
-  #   max_expansion_ratio: 2.0
-  # Uncomment for a Unity CSV project with a Type/content_type column -- the
-  # unity adapter puts that column's value into notes as "type:<value>"
-  # (e.g. "type:dialogue"), reachable here via match_notes_regex.
-  # - name: dialogue
-  #   match_notes_regex: 'type:dialogue'
-  #   needs_character_voice: true
-  #   batch_size: 200
   - name: ui
     default: true
     needs_character_voice: false
     batch_size: 200
     max_expansion_ratio: 1.3   # tighter: buttons/labels are the ones that actually clip
     default_max_length: 40     # only if you know real UI limits and the format has no
-                               # native length column (e.g. Unity CSV/.po usually don't) --
-                               # set from something you actually measured, not a guess
+                               # native length column (e.g. Unity CSV/.po usually don't)
 
 provider:
-  name: antigravity_cli   # antigravity_cli (default) | gemini -- see providers/
-                          # antigravity_cli needs no separate API key if you're already
-                          # signed in via `agy auth login`. gemini is an opt-in
-                          # alternative (free-tier key at aistudio.google.com/apikey) --
-                          # just swap this line, nothing else changes.
+  name: antigravity_cli   # antigravity_cli (default) | gemini
   model: gemini-3.8-flash # bulk-translate model
-  effort: low             # low | high -- antigravity_cli only, ignored by other providers
-  review_model: gemini-3.8-flash # Phase 13 repair; null falls back to `model`. Verified
-                                 # (Artificial Analysis, Aug 2026): gemini-3.8-flash at
-                                 # high effort scores ABOVE gemini-3.1-pro on their
-                                 # Intelligence Index (56 vs 48) while costing meaningfully
-                                 # less per token -- Pro isn't the automatic "stronger model"
-                                 # pick anymore for this generation. escalation_model (below)
-                                 # falls back to THIS if left unset, so changing review_model
-                                 # also moves escalation unless you override it separately.
-  review_effort: high     # low is equally valid here -- high is just the more thorough default
-                          # for a low-volume QA pass
-  mode: sync        # or "batch" for large non-urgent runs (50% cheaper on either provider)
+  effort: low             # low | high -- antigravity_cli only
+  review_model: gemini-3.8-flash
+  review_effort: high
+  mode: sync        # or "batch" for large non-urgent runs
   max_concurrency: 5
 
 tm:
@@ -91,12 +60,62 @@ tm:
 
 confidence:
   review_threshold: 0.75
-  max_expansion_ratio: 1.6  # global default; a category above can override this
-  tier1_repair_attempts: 2  # deterministic-validation failures get this many cheap
-                            # retries through the bulk-translate call (with the
-                            # validator's own message attached) before falling
-                            # through to the expensive review agent. 0 disables this.
+  max_expansion_ratio: 1.6
+  tier1_repair_attempts: 2
 """
+
+_INIT_SOFTWARE_TEMPLATE = """\
+project: {name}
+project_type: software
+source_lang: {source_lang}
+target_lang: {target_lang}
+target_register: informal   # informal (közvetlen — default) | formal (hivatalos)
+
+format: {format}   # generic_kv, po_gettext, xliff, etc.
+
+batches:
+  glob: "batches/*.json"
+
+resources:
+  glossary: resources/glossary.md
+  lang_style: resources/lang-style.md
+  anti_fabrication_checklist: resources/anti-fabrication-checklist.md
+
+categories:
+  - name: action
+    batch_size: 200
+    max_expansion_ratio: 1.4
+    default_max_length: 35
+  - name: menu
+    batch_size: 200
+    max_expansion_ratio: 1.4
+  - name: dialog
+    batch_size: 150
+    max_expansion_ratio: 1.8
+  - name: ui
+    default: true
+    batch_size: 200
+    max_expansion_ratio: 1.5
+
+provider:
+  name: antigravity_cli
+  model: gemini-3.8-flash
+  effort: low
+  review_model: gemini-3.8-flash
+  review_effort: high
+  mode: sync
+  max_concurrency: 5
+
+tm:
+  db_path: tm/translation_memory.sqlite3
+
+confidence:
+  review_threshold: 0.75
+  max_expansion_ratio: 1.6
+  tier1_repair_attempts: 2
+"""
+
+_INIT_TEMPLATE = _INIT_GAME_TEMPLATE
 
 
 def cmd_init(args: argparse.Namespace) -> int:
@@ -106,23 +125,41 @@ def cmd_init(args: argparse.Namespace) -> int:
         return 1
     (root / "batches").mkdir(parents=True)
     (root / "resources").mkdir(parents=True)
-    (root / "project.yaml").write_text(_INIT_TEMPLATE.format(name=args.name), encoding="utf-8")
-    for fname, header in [
-        ("glossary.md", "# Glossary\n\n| Source term | Target translation | Category | Confidence | Source/justification |\n|---|---|---|---|---|\n"),
-        ("lang-style.md", "# Language style guide\n"),
-        ("character-voices.md", "# Character voice bible\n\n| Character | Register | Traits | Avoid |\n|---|---|---|---|\n"),
-        ("anti-fabrication-checklist.md", (
-            "# Anti-fabrication checklist\n"
-            "Never invent numbers, names, or quantities not present in the source.\n"
-            "Never drop content present in the source without a clear formatting reason.\n\n"
-            "This is about content, not sentence shape: restructuring word order, splitting or joining clauses, "
-            "or moving a preverb for natural Hungarian focus (see lang-style.md) is not fabrication or dropped content "
-            "as long as the same information survives. Judge by meaning preserved, not by how closely the sentence "
-            "structure mirrors the source.\n"
-        )),
-    ]:
-        (root / "resources" / fname).write_text(header, encoding="utf-8")
-    print(f"Created projects/{args.name}/. Edit project.yaml, drop batch files in batches/, then:")
+
+    ptype = getattr(args, "type", "game") or "game"
+    src = getattr(args, "source", "en") or "en"
+    tgt = getattr(args, "target", "hu") or "hu"
+    fmt = getattr(args, "format", "generic_kv") or "generic_kv"
+
+    from .presets import LANG_STYLE_PRESETS
+    from .bootstrap import ANTI_FABRICATION_DEFAULT
+
+    if ptype == "software":
+        tmpl = _INIT_SOFTWARE_TEMPLATE
+        style_content = LANG_STYLE_PRESETS.get("Szoftver UI / Asztali alkalmazás", "# Language style guide\n")
+        resource_files = [
+            ("glossary.md", "# Glossary\n\n| Source term | Target translation | Category | Confidence | Source/justification |\n|---|---|---|---|---|\n| OK | OK | ui | high | standard UI |\n| Cancel | Mégse | ui | high | standard UI |\n| Save | Mentés | ui | high | standard UI |\n| Open | Megnyitás | ui | high | standard UI |\n"),
+            ("lang-style.md", style_content),
+            ("anti-fabrication-checklist.md", ANTI_FABRICATION_DEFAULT),
+        ]
+    else:
+        tmpl = _INIT_GAME_TEMPLATE
+        style_content = LANG_STYLE_PRESETS.get("Modern, laza (kortárs akció/kaland)", "# Language style guide\n")
+        resource_files = [
+            ("glossary.md", "# Glossary\n\n| Source term | Target translation | Category | Confidence | Source/justification |\n|---|---|---|---|---|\n"),
+            ("lang-style.md", style_content),
+            ("character-voices.md", "# Character voice bible\n\n| Character | Register | Traits | Avoid |\n|---|---|---|---|\n"),
+            ("anti-fabrication-checklist.md", ANTI_FABRICATION_DEFAULT),
+        ]
+
+    (root / "project.yaml").write_text(
+        tmpl.format(name=args.name, source_lang=src, target_lang=tgt, format=fmt),
+        encoding="utf-8"
+    )
+    for fname, content in resource_files:
+        (root / "resources" / fname).write_text(content, encoding="utf-8")
+
+    print(f"Created projects/{args.name}/ ({ptype} mode, {src} -> {tgt}). Edit project.yaml, drop batch files in batches/, then:")
     print(f"  locpipe plan --project projects/{args.name}   # check the numbers first")
     print(f"  locpipe run --project projects/{args.name}")
     return 0
@@ -339,10 +376,11 @@ def cmd_run(args: argparse.Namespace) -> int:
     # Hook 2: sweep artifacts left behind by a prior crashed run, before this
     # run creates any of its own.
     sweep_result = sweep_orphaned_agy_artifacts()
-    if sweep_result["removed_temp_files"] or sweep_result["removed_sessions"]:
+    if sweep_result.get("removed_temp_files") or sweep_result.get("removed_sessions") or sweep_result.get("removed_conversation_dbs"):
+        dbs_info = f", {sweep_result.get('removed_conversation_dbs', 0)} stale conversation db(s)" if sweep_result.get("removed_conversation_dbs") else ""
         print(
             f"  Startup Sweep:  removed {sweep_result['removed_temp_files']} orphaned temp file(s), "
-            f"{sweep_result['removed_sessions']} stale agy session dir(s)"
+            f"{sweep_result['removed_sessions']} stale agy session dir(s){dbs_info}"
         )
 
     # Hook 3: TM snapshot before any real (billable, TM-writing) run.
@@ -417,7 +455,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 def cmd_verify(args: argparse.Namespace) -> int:
     config = load_project(args.project)
-    adapter = get_adapter(config.format, config.format_options)
+    adapter = get_adapter(config.format, {**config.format_options, "source_lang": config.source_lang, "target_lang": config.target_lang})
 
     snapshot_dir = config.root / "tm" / "pre_merge_snapshots"
     if not snapshot_dir.exists() or not any(snapshot_dir.iterdir()):
@@ -447,8 +485,19 @@ def cmd_verify(args: argparse.Namespace) -> int:
     kept_unchanged_count = 0
     anomalies: list[dict[str, Any]] = []
 
+    batches_dir = config.root / "batches"
     for path in batch_files:
-        snapshot_file = snapshot_dir / path.name
+        try:
+            rel = path.relative_to(batches_dir)
+            snapshot_file = snapshot_dir / rel
+        except ValueError:
+            try:
+                rel = path.relative_to(config.root)
+                snapshot_file = snapshot_dir / rel
+            except ValueError:
+                snapshot_file = snapshot_dir / path.name
+        if not snapshot_file.exists():
+            snapshot_file = snapshot_dir / path.name
         if not snapshot_file.exists():
             continue
 
@@ -593,7 +642,7 @@ def cmd_bootstrap_resources(args: argparse.Namespace) -> int:
 
     lang_style_samples_count = min(60, total_tm) if run_lang_style else 0
 
-    adapter = get_adapter(config.format, config.format_options)
+    adapter = get_adapter(config.format, {**config.format_options, "source_lang": config.source_lang, "target_lang": config.target_lang})
     speaker_count = 0
     if run_character_voices:
         speakers = set()
@@ -713,6 +762,10 @@ def main(argv: list[str] | None = None) -> int:
 
     p_init = sub.add_parser("init", help="scaffold a new project under projects/<name>/")
     p_init.add_argument("name")
+    p_init.add_argument("--type", choices=["game", "software"], default="game", help="project type: game | software")
+    p_init.add_argument("--source", default="en", help="source language code (e.g. en, ja, hu)")
+    p_init.add_argument("--target", default="hu", help="target language code (e.g. hu, en, ja)")
+    p_init.add_argument("--format", default="generic_kv", help="file format adapter (generic_kv, po_gettext, unity, uabea_json, xliff)")
     p_init.set_defaults(func=cmd_init)
 
     p_plan = sub.add_parser("plan", help="read-only: dedup/batch/token estimate, no LLM calls, no writes")

@@ -79,9 +79,22 @@ def _cleanup_antigravity_session(temp_prompt_path: str) -> None:
         temp_name = Path(temp_prompt_path).name
 
         if brain_dir.is_dir():
-            for session_dir in list(brain_dir.iterdir()):
+            # Check most recent sessions first; this batch's session was created in the last 15 minutes
+            recent_sessions = []
+            now = time.time()
+            for session_dir in brain_dir.iterdir():
                 if not session_dir.is_dir():
                     continue
+                try:
+                    mtime = session_dir.stat().st_mtime
+                    if now - mtime < 900:  # 15 minutes
+                        recent_sessions.append((mtime, session_dir))
+                except OSError:
+                    pass
+            recent_sessions.sort(key=lambda x: x[0], reverse=True)
+
+            found_and_cleaned = False
+            for _, session_dir in recent_sessions:
                 transcript = session_dir / ".system_generated" / "logs" / "transcript.jsonl"
                 if transcript.exists():
                     try:
@@ -100,8 +113,12 @@ def _cleanup_antigravity_session(temp_prompt_path: str) -> None:
                                                     extra.unlink()
                                         except Exception:
                                             pass
+                                found_and_cleaned = True
+                                break
                     except Exception:
                         pass
+                if found_and_cleaned:
+                    break
     except Exception:
         pass
 
@@ -234,13 +251,26 @@ class AntigravityCLIProvider(TranslationProvider):
                 if proc.returncode == 0 and stdout:
                     return stdout
 
-                if "RESOURCE_EXHAUSTED" in stderr or "429" in stderr:
+                is_transient = any(
+                    err_str in stderr or err_str in stdout
+                    for err_str in (
+                        "RESOURCE_EXHAUSTED",
+                        "429",
+                        "503",
+                        "500",
+                        "UNAVAILABLE",
+                        "DEADLINE_EXCEEDED",
+                        "Overloaded",
+                        "Service Unavailable",
+                    )
+                )
+                if is_transient:
                     logger.warning(
-                        "agy rate limited on attempt %d/%d (exit code: %s, stderr: %r). Backing off...",
+                        "agy transient error/rate limit on attempt %d/%d (exit code: %s, stderr: %r). Backing off...",
                         attempt_num,
                         max_attempts,
                         proc.returncode,
-                        stderr[:300],
+                        stderr[:300] or stdout[:300],
                     )
                     time.sleep(5 * attempt_num)
                     continue
@@ -293,19 +323,21 @@ class AntigravityCLIProvider(TranslationProvider):
         *,
         max_tokens: int = 8192,
         effort: Optional[str] = None,
+        response_format: str = "json",
     ) -> str:
-        full_prompt = (
-            f"{system_prompt}\n\n--- INPUT ---\n{user_payload}\n\n"
-            "Respond with ONLY the JSON array described above. No other text."
-        )
-        if len(full_prompt) > 30000 and os.name == "nt":
-            import warnings
-            warnings.warn(
-                f"Prompt length ({len(full_prompt)} chars) is close to the Windows 32,767 command-line limit. "
-                "Consider reducing category batch_size in project.yaml."
+        if response_format == "json":
+            full_prompt = (
+                f"{system_prompt}\n\n--- INPUT ---\n{user_payload}\n\n"
+                "Respond with ONLY the JSON array described above. No other text."
             )
+        else:
+            full_prompt = f"{system_prompt}\n\n--- INPUT ---\n{user_payload}\n"
+
         async with self.semaphore:
             stdout = await asyncio.to_thread(self._run_agy, full_prompt, effort)
+
+        if response_format != "json":
+            return stdout.strip()
 
         # Gate 3: does it actually parse as the shape we asked for? An agent
         # harness is more likely than a raw completion API to wrap output in

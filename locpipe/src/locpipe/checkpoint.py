@@ -102,17 +102,34 @@ class Checkpoint:
                         pass
 
     def mark_batch_done(self, category: str, entry_count: int) -> None:
-        self.data["completed_batches"].append(
-            {"category": category, "entry_count": entry_count, "at": time.time()}
-        )
-        self._save()
+        with self._lock:
+            self.data["completed_batches"].append(
+                {"category": category, "entry_count": entry_count, "at": time.time()}
+            )
+            self._save_locked()
+
+    def _save_locked(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.data["last_updated"] = time.time()
+        tmp_path = self.path.with_suffix(f".tmp.{threading.get_ident()}")
+        try:
+            tmp_path.write_text(json.dumps(self.data, indent=2), encoding="utf-8")
+            tmp_path.replace(self.path)
+        finally:
+            if tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except OSError:
+                    pass
 
     def save_batch_drafts(self, drafts: dict[str, str]) -> None:
-        self.data.setdefault("batch_drafts", {}).update(drafts)
-        self._save()
+        with self._lock:
+            self.data.setdefault("batch_drafts", {}).update(drafts)
+            self._save_locked()
 
     def get_batch_drafts(self) -> dict[str, str]:
-        return self.data.get("batch_drafts", {})
+        with self._lock:
+            return dict(self.data.get("batch_drafts", {}))
 
     def mark_file_done(self, file_path: str) -> None:
         """Called only after a file's translations are validated, reviewed
@@ -125,29 +142,35 @@ class Checkpoint:
         untouched -- they aren't rolled back just because a later file
         in the same run failed).
         """
-        if file_path not in self.data["completed_files"]:
-            self.data["completed_files"].append(file_path)
-        self._save()
+        with self._lock:
+            if file_path not in self.data["completed_files"]:
+                self.data["completed_files"].append(file_path)
+            self._save_locked()
 
     def is_file_done(self, file_path: str) -> bool:
-        return file_path in self.data["completed_files"]
+        with self._lock:
+            return file_path in self.data["completed_files"]
 
     def set_pending_job(self, job_id: str, provider_name: str, fingerprint: str, n_requests: int) -> None:
-        self.data["pending_job"] = {
-            "job_id": job_id,
-            "provider_name": provider_name,
-            "fingerprint": fingerprint,
-            "n_requests": n_requests,
-            "submitted_at": time.time(),
-        }
-        self._save()
+        with self._lock:
+            self.data["pending_job"] = {
+                "job_id": job_id,
+                "provider_name": provider_name,
+                "fingerprint": fingerprint,
+                "n_requests": n_requests,
+                "submitted_at": time.time(),
+            }
+            self._save_locked()
 
     def get_pending_job(self) -> Optional[dict]:
-        return self.data.get("pending_job")
+        with self._lock:
+            val = self.data.get("pending_job")
+            return dict(val) if isinstance(val, dict) else val
 
     def clear_pending_job(self) -> None:
-        self.data["pending_job"] = None
-        self._save()
+        with self._lock:
+            self.data["pending_job"] = None
+            self._save_locked()
 
     def progress_summary(self) -> str:
         n = len(self.data["completed_batches"])

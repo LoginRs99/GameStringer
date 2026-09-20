@@ -54,6 +54,37 @@ LANG_STYLE_PRESETS: dict[str, str] = {
         "## Punctuation & rhythm\n"
         "Természetes élőbeszéd ritmusa. Rövidebb, gördülékeny mondatok, emberi párbeszédek.\n"
     ),
+    "Szoftver UI / Asztali alkalmazás": (
+        "# Language style guide\n\n"
+        "## Tone\n"
+        "Professzionális, letisztult, közvetlen szoftveres felhasználói felület. Tömör és pontos megfogalmazások.\n\n"
+        "## UI Actions & Buttons\n"
+        "Gombok és menüparancsok esetén a magyar szoftveres standard a főnévi igenév / rövid főnévi alak "
+        "(pl. Mentés, Megnyitás, Törlés, Bezárás, Mégse, Alkalmaz).\n\n"
+        "## Terminology & Hotkeys\n"
+        "A szabványos szoftveres terminológia használandó (File -> Fájl, Edit -> Szerkesztés, View -> Nézet, Settings/Preferences -> Beállítások). "
+        "A billentyűparancsok (Ctrl+..., Alt+...) és a menü gyorsbillentyű-jelölők (&) megtartandók.\n\n"
+        "## Punctuation\n"
+        "Címkék, gombok és menüpontok végén nincs pont. Párbeszédpanelek kérdéseinél kérdőjel használandó.\n"
+    ),
+    "Szoftver Műszaki / Dokumentáció": (
+        "# Language style guide\n\n"
+        "## Tone\n"
+        "Szakszerű, precíz, egyértelmű műszaki leírás. Kerüld a pongyola megfogalmazást.\n\n"
+        "## Terminology\n"
+        "Konzisztens műszaki és fejlesztői szakkifejezések. A beágyazott kódok, API hivatkozások és paraméterek érintetlenül hagyandók.\n\n"
+        "## Structure\n"
+        "Világos lépések és utasítások. E/2 vagy általános cselekvő forma (pl. \"Kattintson az X gombra\" vagy \"Kattints az X gombra\").\n"
+    ),
+    "Szoftver Eszköz / CLI & Fejlesztői": (
+        "# Language style guide\n\n"
+        "## Tone\n"
+        "Tömör parancssori és diagnosztikai stílus. Hibakódok és technikai jelölők pontos megtartása.\n\n"
+        "## Terminology\n"
+        "Parancssori argumentumok, kapcsolók (--flag, -f) és környezeti változók soha nem fordítandók.\n\n"
+        "## Logs & Errors\n"
+        "A hibaüzenetek pontosak, a diagnosztikát segítők legyenek.\n"
+    ),
 }
 
 DEFAULT_LANG_STYLE_HEADER = "# Language style guide\n"

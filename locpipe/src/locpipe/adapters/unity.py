@@ -50,6 +50,22 @@ def _composite_key(raw_id: str, keyname: str, id_idx: int, keyname_idx: int) -> 
     return raw_id
 
 
+def _lang_column_candidates(lang: Optional[str], default_candidates: list[str]) -> list[str]:
+    cands = []
+    if lang:
+        cands.append(lang)
+        l = lang.lower()
+        if l in ("en", "english"):
+            cands.extend(["english", "en", "eng"])
+        elif l in ("ja", "japanese"):
+            cands.extend(["japanese", "ja", "jp", "日本語", "jpn"])
+        elif l in ("hu", "hungarian"):
+            cands.extend(["hungarian", "hu", "magyar", "hun"])
+    else:
+        cands.extend(default_candidates)
+    return cands
+
+
 class UnityCSVAdapter(FormatAdapter):
     name = "unity"
 
@@ -58,6 +74,8 @@ class UnityCSVAdapter(FormatAdapter):
         target_column_names: Optional[list[str]] = None,
         source_column_names: Optional[list[str]] = None,
         max_length_column_names: Optional[list[str]] = None,
+        source_lang: Optional[str] = None,
+        target_lang: Optional[str] = None,
     ):
         # Extra candidate names for the target/source columns, beyond the
         # generics -- e.g. project.yaml's format_options:
@@ -65,32 +83,46 @@ class UnityCSVAdapter(FormatAdapter):
         #   target_column_names: ["Hungarian_Translation", "Hungarian"]
         self.target_column_names = target_column_names or []
         self.source_column_names = source_column_names or []
-        # Opt-in: only set this if your actual export has a real per-row
-        # character-limit column (some Unity localization exports do, from
-        # the UI component's own max-length setting). If it's not there,
-        # entry.max_length stays None for this adapter's rows -- classify.py's
-        # CategoryRule.default_max_length is the fallback for "no such column,
-        # but I know the limit anyway" (a static per-category number).
         self.max_length_column_names = max_length_column_names or []
+        self.source_lang = source_lang
+        self.target_lang = target_lang
+
+    def _sniff_delimiter(self, path: Path) -> str:
+        try:
+            with open(path, "r", encoding="utf-8-sig", newline="") as f:
+                sample = f.read(4096)
+            if not sample:
+                return ","
+            first_line = sample.splitlines()[0] if sample.splitlines() else ""
+            if "\t" in first_line and "," not in first_line:
+                return "\t"
+            if ";" in first_line and "," not in first_line:
+                return ";"
+            dialect = csv.Sniffer().sniff(sample, delimiters=[",", ";", "\t"])
+            return dialect.delimiter
+        except Exception:
+            return ","
 
     def extract(self, path: Path) -> list[Entry]:
         entries = []
+        delimiter = self._sniff_delimiter(path)
         with open(path, "r", encoding="utf-8-sig", newline="") as f:
-            reader = csv.reader(f)
+            reader = csv.reader(f, delimiter=delimiter)
             header = next(reader, None)
             if not header:
                 return entries
 
             id_idx = _find_column(header, ["id", "key"], 0)
-            source_idx = _find_column(
-                header, [*self.source_column_names, "english", "source", "source text", "en"], 2
-            )
-            en_idx = _find_column(header, ["english", "english_source", "english_text", "en"], -1)
+            src_cands = [*self.source_column_names, "source", "source text"] + _lang_column_candidates(self.source_lang, ["english", "en"])
+            source_idx = _find_column(header, src_cands, 2)
+
+            fallback_src_cands = _lang_column_candidates(self.source_lang, ["english", "english_source", "english_text", "en"])
+            en_idx = _find_column(header, fallback_src_cands, -1)
             keyname_idx = _find_column(header, ["keyname", "key_name", "key"], -1)
             type_idx = _find_column(header, ["type", "content_type", "category"], -1)
-            target_idx = _find_column(
-                header, [*self.target_column_names, "target", "target text"], -1
-            )
+
+            tgt_cands = [*self.target_column_names, "target", "target text"] + _lang_column_candidates(self.target_lang, ["hungarian", "hu"])
+            target_idx = _find_column(header, tgt_cands, -1)
             max_length_idx = _find_column(
                 header, [*self.max_length_column_names, "max_length", "char_limit", "character_limit"], -1
             )
@@ -146,9 +178,10 @@ class UnityCSVAdapter(FormatAdapter):
 
     def merge(self, path: Path, entries: list[Entry]) -> None:
         by_key = {e.key: e.target for e in entries}
+        delimiter = self._sniff_delimiter(path)
 
         with open(path, "r", encoding="utf-8-sig", newline="") as fin:
-            reader = csv.reader(fin)
+            reader = csv.reader(fin, delimiter=delimiter)
             rows = list(reader)
         if not rows:
             return
@@ -156,11 +189,13 @@ class UnityCSVAdapter(FormatAdapter):
 
         id_idx = _find_column(header, ["id", "key"], 0)
         keyname_idx = _find_column(header, ["keyname", "key_name", "key"], -1)
-        target_idx = _find_column(header, [*self.target_column_names, "target", "target text"], -1)
+        tgt_cands = [*self.target_column_names, "target", "target text"] + _lang_column_candidates(self.target_lang, ["hungarian", "hu"])
+        target_idx = _find_column(header, tgt_cands, -1)
 
         if target_idx == -1:
             target_idx = len(header)
-            header = [*header, (self.target_column_names[0] if self.target_column_names else "target")]
+            target_col_name = self.target_column_names[0] if self.target_column_names else (self.target_lang or "target")
+            header = [*header, target_col_name]
 
         out_rows = [header]
         for row in data_rows:
@@ -180,5 +215,5 @@ class UnityCSVAdapter(FormatAdapter):
 
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w", encoding="utf-8-sig", newline="") as fout:
-            csv.writer(fout).writerows(out_rows)
+            csv.writer(fout, delimiter=delimiter).writerows(out_rows)
 

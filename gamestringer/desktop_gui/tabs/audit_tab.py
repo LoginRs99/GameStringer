@@ -244,7 +244,7 @@ class AuditTab(ttk.Frame):
 
             try:
                 config = load_project(self.current_project_dir)
-                adapter = get_adapter(config.format, config.format_options)
+                adapter = get_adapter(config.format, {**config.format_options, "source_lang": config.source_lang, "target_lang": config.target_lang})
 
                 import inspect
                 if "audit_sink" not in inspect.signature(adapter.extract).parameters:

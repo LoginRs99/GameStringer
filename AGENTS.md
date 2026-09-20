@@ -19,16 +19,15 @@ Whenever you need exact field definitions or commands, consult `locpipe/HASZNALA
 When a user asks you to translate or verify a game project under `locpipe/projects/<Project Name>/`:
 
 ### Step 1: Validate `project.yaml` & Resources
-1. **Format:** Verify that `format` (e.g. `uabea_json`, `unity`, `generic_kv`, `po_gettext`) matches the actual file structure inside `batches/`.
-2. **Provider:** Ensure `provider.name: antigravity_cli`, `model: gemini-3.8-flash` (effort: `low`), and `review_model: gemini-3.8-flash` (effort: `high`).
-3. **Register:** Set `target_register: informal` (tegeződés, standard for gaming).
-4. **Style Guide (`resources/lang-style.md`):** Ensure it is NOT empty. Apply one of the 4 standard presets from `locpipe/src/locpipe/presets.py`:
-   - `Modern, laza` (action / adventure)
-   - `Fantasy/archaikus` (RPGs / fantasy)
-   - `Semleges/technikai` (simulators / UI-heavy)
-   - `Humoros/ironikus` (comedy / parody / stylized action)
-5. **Anti-Fabrication (`resources/anti-fabrication-checklist.md`):** Ensure standard anti-fabrication rules are present.
-6. **Batch Size:** Keep `batch_size: 200` (default) for fast calls and zero token-truncation retries.
+1. **Type & Languages:** Verify `project_type: game | software`, `source_lang` (e.g. `en`, `ja`, `hu`), and `target_lang` (e.g. `hu`, `en`, `ja`). Cross-translation is fully supported.
+2. **Format:** Verify that `format` (e.g. `uabea_json`, `unity`, `generic_kv`, `po_gettext`, `ue4_5_po`, `xliff`) matches the actual file structure inside `batches/`.
+3. **Provider:** Ensure `provider.name: antigravity_cli`, `model: gemini-3.8-flash` (effort: `low`), and `review_model: gemini-3.8-flash` (effort: `high`).
+4. **Register:** Set `target_register: informal` (tegeződés/közvetlen, standard for gaming and modern software UI) or `formal`.
+5. **Style Guide (`resources/lang-style.md`):** Ensure it is NOT empty. Apply the appropriate preset from `locpipe/src/locpipe/presets.py`:
+   - **Game:** `Modern, laza` | `Fantasy/archaikus` | `Semleges/technikai` | `Humoros/ironikus`
+   - **Software:** `Szoftver UI / Asztali alkalmazás` | `Szoftver Műszaki / Dokumentáció` | `Szoftver Eszköz / CLI & Fejlesztői`
+6. **Anti-Fabrication (`resources/anti-fabrication-checklist.md`):** Ensure standard anti-fabrication rules are present.
+7. **Batch Size:** Keep `batch_size: 200` (default) for fast calls and zero token-truncation retries.
 
 ### Step 2: Run Audit (Zero Cost)
 Always run `locpipe audit` before calling any LLMs to check classification:
@@ -45,7 +44,8 @@ Always run a small, bounded test first:
 locpipe run --project "locpipe/projects/<Project Name>" --limit 1 --max-api-calls 20
 ```
 - Report the results to the user with sample translated lines (Source → Target).
-- Confirm control codes and tags (`{0}`, `%s`, `<ctrl:...>`, etc.) are preserved.
+- Confirm control codes, escape sequences (`\n`, `\r`, `\t`), RPG Maker/VN tags (`\C[#]`, `\V[#]`), Ruby tags, gender slots, and access keys (`&File`, `Ctrl+S`) are preserved.
+- Confirm any physical `max_length` limits are respected.
 - **STOP and wait for the user's explicit go-ahead** before running the full project.
 
 ### Step 4: Full Project Run (External Terminal Recommended)

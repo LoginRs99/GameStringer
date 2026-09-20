@@ -103,7 +103,8 @@ class PoGettextAdapter(FormatAdapter):
         return entries
 
     def merge(self, path: Path, entries: list[Entry]) -> None:
-        po = polib.pofile(str(path))
+        po = polib.pofile(str(path), wrapwidth=0)
+        po.wrapwidth = 0
         by_msgid: dict[tuple, polib.POEntry] = {(e.msgctxt, e.msgid): e for e in po}
 
         for entry in entries:
