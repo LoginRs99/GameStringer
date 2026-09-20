@@ -16,6 +16,7 @@ Unified localization pipeline and desktop preflight GUI (`gamestringer-gui`) wra
 | Format Adapter | Source Engine / Export Tool | Notes |
 |---|---|---|
 | `generic_kv` | JSON / Key-Value localization dumps | Generic dictionary maps (Universal Default) |
+| `naninovel` | Naninovel Visual Novel Engine | Scripts (`*.txt`) dialogue & Managed Text UI documents |
 | `uabea_json` | Unity (UABEA export) | Supports CSV-in-m_Script and typetree object graph with noise filtering & path excludes |
 | `unity` | Unity Localization Package | Official Unity Localization CSV tables |
 | `po_gettext` / `ue4_5_po` | Unreal Engine Localization Dashboard / GNU gettext | Standard PO format and Unreal plural/gender syntax |

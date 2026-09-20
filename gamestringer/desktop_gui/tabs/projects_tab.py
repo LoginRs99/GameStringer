@@ -267,7 +267,7 @@ class NewProjectDialog(tk.Toplevel):
 
         self.var_format = tk.StringVar(value="generic_kv")
         r_f, _ = labeled_combo(form, "Format Adapter:", self.var_format,
-                               values=["generic_kv", "uabea_json", "unity", "po_gettext", "ue4_5_po", "xliff"],
+                               values=["generic_kv", "naninovel", "uabea_json", "unity", "po_gettext", "ue4_5_po", "xliff", "weblate_xliff"],
                                width=20, label_width=15, state="readonly",
                                tooltip="File format adapter for batch extraction & merge")
         r_f.pack(fill=tk.X, pady=4)
@@ -428,6 +428,7 @@ class ProjectsTab(ttk.Frame):
         self.var_format = tk.StringVar(value="generic_kv")
         format_tooltips = (
             "Format Adapter:\n"
+            "• naninovel: Naninovel Visual Novel engine (Scripts/*.txt & Managed Text *.txt)\n"
             "• uabea_json: Unity UABEA JSON dumps (CSV in m_Script or typetree walk)\n"
             "• unity: Official Unity Localization Package CSV export\n"
             "• ue4_5_po: Unreal Engine Localization Dashboard .po export (with plural/gender modifiers)\n"
@@ -437,7 +438,7 @@ class ProjectsTab(ttk.Frame):
         )
         r_fmt, self.combo_format = labeled_combo(
             r1, "Format Adapter:", self.var_format,
-            values=["uabea_json", "unity", "po_gettext", "ue4_5_po", "generic_kv", "xliff", "weblate_xliff"],
+            values=["generic_kv", "naninovel", "uabea_json", "unity", "po_gettext", "ue4_5_po", "xliff", "weblate_xliff"],
             width=16, label_width=13, tooltip=format_tooltips
         )
         r_fmt.pack(side=tk.LEFT)
@@ -1251,6 +1252,17 @@ class ProjectsTab(ttk.Frame):
                 "anti_fabrication_checklist": "resources/anti-fabrication-checklist.md",
             }
 
+        if fmt == "naninovel":
+            batch_glob = "batches/**/*.txt"
+        elif fmt in ("po_gettext", "ue4_5_po"):
+            batch_glob = "batches/**/*.po"
+        elif fmt in ("xliff", "weblate_xliff"):
+            batch_glob = "batches/**/*.xlf"
+        elif fmt == "unity":
+            batch_glob = "batches/**/*.csv"
+        else:
+            batch_glob = "batches/*.json"
+
         template_yaml = {
             "project": name,
             "project_type": ptype,
@@ -1258,7 +1270,7 @@ class ProjectsTab(ttk.Frame):
             "target_lang": tgt,
             "target_register": "informal",
             "format": fmt,
-            "batches": {"glob": "batches/*.json"},
+            "batches": {"glob": batch_glob},
             "resources": resources_cfg,
             "categories": categories,
             "provider": {

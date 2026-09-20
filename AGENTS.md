@@ -20,7 +20,7 @@ When a user asks you to translate or verify a game project under `locpipe/projec
 
 ### Step 1: Validate `project.yaml` & Resources
 1. **Type & Languages:** Verify `project_type: game | software`, `source_lang` (e.g. `en`, `ja`, `hu`), and `target_lang` (e.g. `hu`, `en`, `ja`). Cross-translation is fully supported.
-2. **Format:** Verify that `format` (e.g. `uabea_json`, `unity`, `generic_kv`, `po_gettext`, `ue4_5_po`, `xliff`) matches the actual file structure inside `batches/`.
+2. **Format:** Verify that `format` (e.g. `naninovel`, `uabea_json`, `unity`, `generic_kv`, `po_gettext`, `ue4_5_po`, `xliff`) matches the actual file structure inside `batches/`. Note: Naninovel visual novel projects require recursive glob `batches/**/*.txt`.
 3. **Provider:** Ensure `provider.name: antigravity_cli`, `model: gemini-3.8-flash` (effort: `low`), and `review_model: gemini-3.8-flash` (effort: `high`).
 4. **Register:** Set `target_register: informal` (tegeződés/közvetlen, standard for gaming and modern software UI) or `formal`.
 5. **Style Guide (`resources/lang-style.md`):** Ensure it is NOT empty. Apply the appropriate preset from `locpipe/src/locpipe/presets.py`:

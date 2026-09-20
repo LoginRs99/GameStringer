@@ -99,6 +99,7 @@ A legbiztonságosabb és legköltséghatékonyabb lokalizációs sorrend:
 
 ### 1. Lépés: Adatkinyerés (Dump)
 Exportáld ki a játék szövegeit a megfelelő formátumban:
+- **Naninovel (Visual Novel):** Naninovel által generált `.txt` lokalizációs dokumentumok (`Scripts/*.txt` párbeszédek és gyökérkönyvtári Managed Text fájlok, pl. `DefaultUI.txt`, `CharacterNames.txt`).
 - **Unity:** UABEA JSON dump (MonoBehaviour vagy TextAsset CSV) vagy Unity Localization CSV.
 - **Unreal Engine 4/5:** Localization Dashboard `.po` fájlok.
 - **Egyéb / Szoftver:** Standard `.po`, GNU gettext, XLIFF 1.2 vagy egyszerű `.json` kulcs-érték párok.
@@ -169,7 +170,7 @@ project_type: game          # game | software
 source_lang: en             # en | ja | hu | stb.
 target_lang: hu             # hu | en | ja | stb.
 target_register: informal   # informal | formal
-format: uabea_json          # uabea_json | unity | ue4_5_po | po_gettext | generic_kv | xliff
+format: uabea_json          # naninovel | uabea_json | unity | ue4_5_po | po_gettext | generic_kv | xliff
 
 batches:
   glob: "*/*.json"          # bemeneti fájlok mintázata
@@ -228,7 +229,7 @@ confidence:
 
 | Parancs | Leírás | LLM Hívás? |
 |---|---|:---:|
-| `locpipe init <név> [--type game\|software] [--source en] [--target hu] [--format uabea_json]` | Új projektstruktúra létrehozása megadott típussal és nyelvvel | ❌ |
+| `locpipe init <név> [--type game|software] [--source en] [--target hu] [--format naninovel|uabea_json|...]` | Új projektstruktúra létrehozása megadott típussal és nyelvvel | ❌ |
 | `locpipe plan --project <útvonal> [--limit N]` | Előzetes token-, duplikáció- és batch-számítás | ❌ |
 | `locpipe audit --project <útvonal>` | Formátum zajszűrésének vizsgálata (`audit_report.md`) | ❌ |
 | `locpipe verify --project <útvonal>` | Fordítás utáni integritás-ellenőrzés (bizonyítja a zaj érintetlenségét) | ❌ |

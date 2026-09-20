@@ -20,6 +20,7 @@ GameStringer consolidates video game and software localization into a clean, det
 
 ```
 1. Manual Extraction (External)
+   ├── Naninovel: Visual novel localization scripts & managed text (*.txt)
    ├── Unity: UABEA JSON export or Unity Localization CSV
    ├── Unreal: Localization Dashboard .po export (ue4_5_po)
    └── Software / Generic: PO gettext, XLIFF 1.2, or JSON key-value
@@ -129,7 +130,7 @@ GameStringer-main/
 │   └── desktop_gui/               # 4-tab Tkinter GUI (app.py, theme.py, tabs/)
 ├── locpipe/                       # LocPipe deterministic translation engine
 │   ├── pyproject.toml             # Standalone locpipe package spec
-│   ├── src/locpipe/               # Pipeline, adapters (uabea_json, po, unity, xliff), providers (antigravity_cli)
+│   ├── src/locpipe/               # Pipeline, adapters (naninovel, uabea_json, po, unity, xliff), providers (antigravity_cli)
 │   └── tests/                     # LocPipe test suite
 ├── archive/                       # Archived legacy extraction scripts & test packs
 ├── pyproject.toml                 # Root unified package configuration

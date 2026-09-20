@@ -20,11 +20,12 @@ target_register: informal   # informal (tegez — default) | formal (magáz)
 
 format: {format}   # ported: generic_kv, po_gettext, ue4_5_po (Unreal Localization
                      # Dashboard .po export), unity (official Localization Package CSV
-                     # export), uabea_json (UABEA asset-dump export), xliff/weblate_xliff
+                     # export), uabea_json (UABEA asset-dump export), naninovel
+                     # (Scripts/*.txt & Managed Text *.txt), xliff/weblate_xliff
                      # -- see locpipe/adapters/registry.py for details on each
 
 batches:
-  glob: "batches/*.json"
+  glob: "{batch_glob}"
 
 resources:
   glossary: resources/glossary.md
@@ -72,7 +73,7 @@ target_register: informal   # informal (közvetlen — default) | formal (hivata
 format: {format}   # generic_kv, po_gettext, xliff, etc.
 
 batches:
-  glob: "batches/*.json"
+  glob: "{batch_glob}"
 
 resources:
   glossary: resources/glossary.md
@@ -129,6 +130,17 @@ def cmd_init(args: argparse.Namespace) -> int:
     tgt = getattr(args, "target", "hu") or "hu"
     fmt = getattr(args, "format", "generic_kv") or "generic_kv"
 
+    if fmt == "naninovel":
+        batch_glob = "batches/**/*.txt"
+    elif fmt in ("po_gettext", "ue4_5_po"):
+        batch_glob = "batches/**/*.po"
+    elif fmt in ("xliff", "weblate_xliff"):
+        batch_glob = "batches/**/*.xlf"
+    elif fmt == "unity":
+        batch_glob = "batches/**/*.csv"
+    else:
+        batch_glob = "batches/*.json"
+
     from .presets import LANG_STYLE_PRESETS
     from .bootstrap import ANTI_FABRICATION_DEFAULT
 
@@ -151,7 +163,7 @@ def cmd_init(args: argparse.Namespace) -> int:
         ]
 
     (root / "project.yaml").write_text(
-        tmpl.format(name=args.name, source_lang=src, target_lang=tgt, format=fmt),
+        tmpl.format(name=args.name, source_lang=src, target_lang=tgt, format=fmt, batch_glob=batch_glob),
         encoding="utf-8"
     )
     for fname, content in resource_files:
@@ -763,7 +775,7 @@ def main(argv: list[str] | None = None) -> int:
     p_init.add_argument("--type", choices=["game", "software"], default="game", help="project type: game | software")
     p_init.add_argument("--source", default="en", help="source language code (e.g. en, ja, hu)")
     p_init.add_argument("--target", default="hu", help="target language code (e.g. hu, en, ja)")
-    p_init.add_argument("--format", default="generic_kv", help="file format adapter (generic_kv, po_gettext, unity, uabea_json, xliff)")
+    p_init.add_argument("--format", default="generic_kv", help="file format adapter (generic_kv, naninovel, po_gettext, unity, uabea_json, ue4_5_po, xliff)")
     p_init.set_defaults(func=cmd_init)
 
     p_plan = sub.add_parser("plan", help="read-only: dedup/batch/token estimate, no LLM calls, no writes")

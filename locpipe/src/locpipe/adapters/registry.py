@@ -63,6 +63,7 @@ from .po_gettext import PoGettextAdapter
 from .unity import UnityCSVAdapter
 from .xliff import XLIFFAdapter
 from .uabea_json import UABEAJsonAdapter
+from .naninovel import NaninovelAdapter
 
 _NOT_YET_PORTED = {
     "renpy": "format-renpy.md",
@@ -85,11 +86,14 @@ _CONFIGURABLE_REGISTRY = {
     "unity": UnityCSVAdapter,
     "uabea_json": UABEAJsonAdapter,
     "bayonetta_json": UABEAJsonAdapter,
+    "naninovel": NaninovelAdapter,
 }
 
 
 def get_adapter(format_name: str, format_options: dict[str, Any] | None = None) -> FormatAdapter:
     opts = format_options or {}
+    if format_name == "naninovel":
+        return NaninovelAdapter(options=opts)
     if format_name == "uabea_json":
         return UABEAJsonAdapter(options=opts)
     if format_name in ("xliff", "weblate_xliff"):

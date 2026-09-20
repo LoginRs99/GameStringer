@@ -23,8 +23,8 @@ PROTECTED_PATTERNS = [
     re.compile(r"</?[a-zA-Z0-9_\-=\#\.\s\":/]+>"),
     # 4. Printf format specifiers (%s, %d, %f, %.2f, %1$s, %2$d)
     re.compile(r"%(?:\d+\$)?[0-9\.\-\+]*[sdfuxXgGcping]"),
-    # 5. Game tag bracket identifiers ([ITEM_ID], [KEY_NAME])
-    re.compile(r"\[[A-Z0-9_\-\:\.]+\]"),
+    # 5. Game tag bracket identifiers and commands ([ITEM_ID], [KEY_NAME], [style=accent], [accent])
+    re.compile(r"\[[A-Za-z0-9_\-\:\.=#]+\]"),
     # 6. RPG Maker / Visual Novel / game engine escape sequences (\C[1], \V[2], \I[3], \G, \!, \., \|, \>, \<, \{, \})
     re.compile(r"\\[A-Za-z]+\[\d+\]|\\[Gg]|\\[\.\!\^\|\>\<\{\}\$]"),
     # 7. Escaped string characters (\n, \r, \t)
@@ -33,6 +33,8 @@ PROTECTED_PATTERNS = [
     re.compile(r"</?ruby(?:=[^>]+)?>|</?rt>|</?rp>|\[/?ruby(?:=[^\]]+)?\]|\[/?rt\]"),
     # 9. Keyboard shortcuts (Ctrl+S, Alt+F4, Ctrl+Shift+P)
     re.compile(r"\b(?:Ctrl|Alt|Shift|Cmd|Meta)\+[A-Za-z0-9\+]+"),
+    # 10. Naninovel inline expression slot ($@)
+    re.compile(r"\$@"),
 ]
 
 
