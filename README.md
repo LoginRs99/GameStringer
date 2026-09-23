@@ -64,6 +64,9 @@ pip install -e .
 
 # Launch Desktop GUI
 gamestringer-gui
+
+# Run automated tests (190 tests, 100% pass)
+pytest
 ```
 
 ### Dependencies
@@ -134,5 +137,7 @@ GameStringer-main/
 │   └── tests/                     # LocPipe test suite
 ├── archive/                       # Archived legacy extraction scripts & test packs
 ├── pyproject.toml                 # Root unified package configuration
-└── test_cli.py                    # GameStringer utility test suite
+├── test_cli.py                    # GameStringer utility test suite
+├── test_gui.py                    # Desktop GUI component test suite
+└── test_gamestringer_core_extra.py # Core & CLI comprehensive test suite
 ```

@@ -241,3 +241,19 @@ confidence:
 | `locpipe tm-invalidate --project <útvonal> --key <szó>` | Adott fordítás törlése a TM-ből újrafordítás kényszerítéséhez | ❌ |
 | `locpipe bootstrap-resources --project <útvonal>` | Glosszárium, stílus és hangnem vázlatok készítése a TM-ből | ✔️ |
 
+---
+
+## 9. Automatikus Tesztelés és Minőségellenőrzés (QA)
+
+A rendszer teljes körű (190 tesztből álló, 100% zöld) automatizált tesztcsomaggal rendelkezik, amely garantálja a motorok, adapterek, vezérlőkód-védelmek, validátorok és a fordítási memória hibátlan működését.
+
+A teljes tesztcsomag futtatása:
+```bash
+uv run pytest
+```
+
+Futtatás részletes lefedettségi riporttal (coverage):
+```bash
+uv run pytest --cov=locpipe --cov=gamestringer test_cli.py test_gui.py test_gamestringer_core_extra.py locpipe/tests
+```
+

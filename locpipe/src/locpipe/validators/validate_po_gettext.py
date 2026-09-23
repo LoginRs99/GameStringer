@@ -112,8 +112,15 @@ def token_sets(text):
 
 def validate_file(path, glossary_entries=None):
     critical, major, minor, info = [], [], [], []
-    with open(path, "r", encoding="utf-8") as f:
-        text = f.read()
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            text = f.read()
+    except FileNotFoundError:
+        critical.append(f"Fajl nem talalhato: {path}")
+        return critical, major, minor, info
+    except OSError as e:
+        critical.append(f"Fajl olvasasi hiba: {e}")
+        return critical, major, minor, info
 
     entries, header_nplurals = parse_po(text)
     if not entries:

@@ -283,7 +283,7 @@ def load_project(project_dir: str | Path) -> ProjectConfig:
     if not any(c.is_default for c in categories):
         categories[-1].is_default = True
 
-    provider_raw = raw.get("provider", {})
+    provider_raw = raw.get("provider") or {}
     escalation_raw = raw.get("escalation") or raw.get("qa") or {}
     provider = ProviderConfig(
         name=provider_raw.get("name", "antigravity_cli"),
@@ -308,7 +308,7 @@ def load_project(project_dir: str | Path) -> ProjectConfig:
             "Only 'antigravity_cli' is supported."
         )
 
-    tm_raw = raw.get("tm", {})
+    tm_raw = raw.get("tm") or {}
     tm_db_path = _resolve(root, tm_raw.get("db_path", "tm/translation_memory.sqlite3"))
     confidence_raw = raw.get("confidence") or {}
 
@@ -346,7 +346,7 @@ def load_project(project_dir: str | Path) -> ProjectConfig:
         review_threshold=confidence_raw.get("review_threshold", 0.75),
         max_expansion_ratio=confidence_raw.get("max_expansion_ratio", 1.6),
         tier1_repair_attempts=confidence_raw.get("tier1_repair_attempts", 1),
-        format_options=raw.get("format_options", {}),
+        format_options=raw.get("format_options") or {},
         escalation_confidence_threshold=confidence_raw.get("escalation_confidence_threshold", 0.30),
         escalation_sample_rate=confidence_raw.get("escalation_sample_rate", escalation_raw.get("sample_rate", 0.01)),
         fidelity_sample_rate=confidence_raw.get("fidelity_sample_rate", 0.03),

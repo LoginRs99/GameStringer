@@ -86,6 +86,12 @@ def validate_file(path, glossary_entries=None):
 
     try:
         tree = ET.parse(path)
+    except FileNotFoundError:
+        critical.append(f"Fajl nem talalhato: {path}")
+        return critical, major, minor, info
+    except OSError as e:
+        critical.append(f"Fajl olvasasi hiba: {e}")
+        return critical, major, minor, info
     except ET.ParseError as e:
         critical.append(f"XML parse hiba: {e}")
         return critical, major, minor, info

@@ -38,6 +38,7 @@ keyword, and set of plural/ordinal branches survived intact.
 
 from __future__ import annotations
 
+from pathlib import Path
 import re
 from dataclasses import dataclass, field
 
@@ -204,8 +205,15 @@ def validate_file(path: str, glossary_entries: list) -> tuple[list[str], list[st
     from . import validate_po_gettext
 
     critical, major, minor, info = validate_po_gettext.validate_file(path, glossary_entries)
+    if not Path(path).is_file():
+        return critical, major, minor, info
 
-    po = polib.pofile(path)
+    try:
+        po = polib.pofile(path)
+    except Exception as e:
+        critical.append(f"PO parse hiba: {e}")
+        return critical, major, minor, info
+
     for entry in po:
         if entry.obsolete:
             continue

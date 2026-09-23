@@ -52,7 +52,7 @@ def derive_context_key(
     key_lower = (entry.key or "").lower()
     for name in known_characters:
         slug = name.lower().replace(" ", "_")
-        if slug and slug in key_lower:
+        if slug and (slug == key_lower or re.search(rf"(?:^|[_\-./:]){re.escape(slug)}(?:$|[_\-./:])", key_lower)):
             return name, "key_pattern"
 
     return None, "none"

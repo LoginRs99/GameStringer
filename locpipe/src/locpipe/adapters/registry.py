@@ -94,7 +94,7 @@ def get_adapter(format_name: str, format_options: dict[str, Any] | None = None) 
     opts = format_options or {}
     if format_name == "naninovel":
         return NaninovelAdapter(options=opts)
-    if format_name == "uabea_json":
+    if format_name in ("uabea_json", "bayonetta_json"):
         return UABEAJsonAdapter(options=opts)
     if format_name in ("xliff", "weblate_xliff"):
         return XLIFFAdapter(options=opts)

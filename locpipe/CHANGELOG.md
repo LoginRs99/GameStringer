@@ -2,6 +2,35 @@
 
 All notable changes to `locpipe` will be documented in this file.
 
+## [2.0.0] - 2026-09-24
+
+### Stable Production Release: QA Hardening, Naninovel Engine & Comprehensive Test Coverage
+
+#### Automated Test Suite & QA Coverage
+- Expanded test suite to **190 tests (100% PASS)** with **82% repository-wide line coverage**.
+- Added dedicated test modules: `test_gamestringer_core_extra.py`, `test_character_voices.py`, `test_context_key.py`, `test_validators_extra.py`, `test_font_check_and_fallback.py`, and `test_adapters_extra.py`.
+
+#### Naninovel Visual Novel Engine Support
+- New `naninovel` format adapter (`NaninovelAdapter`) for visual novel `.txt` script and managed text extraction and merging.
+- New `validate_naninovel.py` mechanical integrity validator ensuring HTML/TMPro tags, placeholder variables (`{0}`, `{pop}`), inline commands (`[accent]`, `[style=...]`), and pipe fragment counts are strictly preserved.
+- New `Visual Novel / Adult (NSFW & Romance / Eroge)` style preset in `presets.py`.
+- Desktop GUI and CLI integration with recursive batch globs (`batches/**/*.txt`).
+
+#### Antigravity CLI Artifact Hygiene & Safety
+- Hardened orphan cleanup in `run_safety.py` and `antigravity_cli_provider.py` to strictly match `locpipe_agy_prompt_` or `locpipe` session markers before deleting session folders or conversation `.db` files.
+- Added automatic pruning of deleted sessions from `~/.gemini/antigravity-cli/conversations/conversation_summaries.db`.
+- Preserved user manual chat sessions from being swept even when older than 1 hour.
+
+#### Robustness, Resilience & Bug Fixes
+- **Config parsing:** Safely handled empty/null YAML sections (`format_options:`, `provider:`, `tm:`) to prevent `AttributeError` on `.setdefault()`.
+- **Character voices:** Fixed speaker normalization to support multi-lingual and non-ASCII character names (Japanese Kanji/Kana, Cyrillic, accented Hungarian).
+- **Context keys:** Enforced delimiter boundaries `(?:^|[_\-./:]){slug}(?:$|[_\-./:])` in identifier matching to eliminate false-positive context attribution.
+- **Validators:** Handled missing and unreadable files with safe exception handling (`FileNotFoundError`, `OSError`) returning clean CRITICAL validation reports.
+- **Font preflight:** Handled `None` format options safely during automatic Hungarian character fallback (`apply_hungarian_fallback_if_needed`).
+- **Adapter registry:** Correctly forwarded `format_options` to `UABEAJsonAdapter` for `bayonetta_json`.
+
+---
+
 ## [1.0.0] - 2026-09-20
 
 ### Stable Production Release: Multilingual, Game Engine Limits & Software Mode

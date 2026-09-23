@@ -85,6 +85,12 @@ def validate_file(path, glossary_entries=None):
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
+    except FileNotFoundError:
+        critical.append(f"Fajl nem talalhato: {path}")
+        return critical, major, minor, info
+    except OSError as e:
+        critical.append(f"Fajl olvasasi hiba: {e}")
+        return critical, major, minor, info
     except json.JSONDecodeError as e:
         critical.append(f"Ervenytelen JSON: {e}")
         return critical, major, minor, info

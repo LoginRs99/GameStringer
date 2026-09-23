@@ -80,13 +80,16 @@ def prune_character_voices_for_batch(
     def _matches_speaker(name: str, spkrs: set[str]) -> bool:
         if name in spkrs:
             return True
-        name_norm = re.sub(r"[^a-z0-9]", "", name.lower())
+        name_norm = re.sub(r"[^\w]", "", name.lower())
         for sp in spkrs:
-            sp_norm = re.sub(r"[^a-z0-9]", "", sp.lower())
-            if name_norm == sp_norm:
+            if name == sp:
                 return True
-            if len(name_norm) >= 3 and (name_norm in sp_norm or sp_norm in name_norm):
-                return True
+            sp_norm = re.sub(r"[^\w]", "", sp.lower())
+            if name_norm and sp_norm:
+                if name_norm == sp_norm:
+                    return True
+                if len(name_norm) >= 3 and (name_norm in sp_norm or sp_norm in name_norm):
+                    return True
         return False
 
     kept = [line for name, line in rows.items() if _matches_speaker(name, speakers)]

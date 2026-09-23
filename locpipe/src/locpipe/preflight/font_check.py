@@ -143,6 +143,9 @@ def apply_hungarian_fallback_if_needed(config, asset_path: str, engine: str) -> 
     result = check_game_fonts(asset_path, engine)
 
     applied_fallback: Dict[str, str] = {}
+    if config.format_options is None:
+        config.format_options = {}
+
     if not result.get("hungarian_support", True):
         current = config.format_options.setdefault("character_replacements", {})
         for src_char, fallback_char in DEFAULT_HU_FALLBACK.items():
@@ -156,7 +159,7 @@ def apply_hungarian_fallback_if_needed(config, asset_path: str, engine: str) -> 
         "engine": engine,
         "font_check_result": result,
         "character_replacements_applied": applied_fallback,
-        "character_replacements_in_effect": dict(config.format_options.get("character_replacements", {})),
+        "character_replacements_in_effect": dict((config.format_options or {}).get("character_replacements", {})),
     }
     report_dir = Path(config.root) / "preflight"
     report_dir.mkdir(parents=True, exist_ok=True)

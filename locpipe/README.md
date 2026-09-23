@@ -98,6 +98,7 @@ Set `format:` in project.yaml. Adapter status, honestly:
 | `ue4_5_po` | done | aliases straight to the po_gettext adapter (Unreal's Localization Dashboard export is standard gettext with `msgctxt` carrying the Unreal identity/namespace) -- but gets its own extra validator, see below |
 | `unity` | done | official Unity Localization Package CSV export |
 | `uabea_json` | done | raw UABEA asset-dump export (MonoBehaviour typetree, CSV-in-`m_Script`, or a flat JSON array) -- see "uabea_json noise filtering" below |
+| `naninovel` | done | Naninovel visual novel script & managed text (*.txt) with bracket command and actor preservation |
 | `xliff` / `weblate_xliff` | done | both alias to the same XLIFF adapter |
 | `renpy`, `ue3` | not implemented | no adapter, no validator, `get_adapter()` raises `NotImplementedError` naming the gap. Add both together (extract/merge + `validate_file`) if a project actually needs one -- carrying a validator with nothing to feed it is dead weight, not a head start. |
 
