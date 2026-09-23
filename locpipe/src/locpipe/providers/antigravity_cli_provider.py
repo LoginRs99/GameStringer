@@ -113,6 +113,15 @@ def _cleanup_antigravity_session(temp_prompt_path: str) -> None:
                                                     extra.unlink()
                                         except Exception:
                                             pass
+                                summaries_db = home_cli / "conversation_summaries.db"
+                                if summaries_db.exists():
+                                    try:
+                                        import sqlite3
+                                        with sqlite3.connect(str(summaries_db), timeout=5) as conn:
+                                            conn.execute("DELETE FROM conversation_summaries WHERE conversation_id = ?", (session_id,))
+                                            conn.commit()
+                                    except Exception:
+                                        pass
                                 found_and_cleaned = True
                                 break
                     except Exception:

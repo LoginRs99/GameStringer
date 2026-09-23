@@ -89,6 +89,46 @@ def sweep_orphaned_agy_artifacts(max_age_s: int = 3600) -> Dict[str, int]:
     home_cli = Path.home() / ".gemini" / "antigravity-cli"
     brain_dir = home_cli / "brain"
     conv_dir = home_cli / "conversations"
+    summaries_db = home_cli / "conversation_summaries.db"
+
+    def _is_locpipe_session_dir(s_dir: Path) -> bool:
+        if "locpipe" in s_dir.name.lower():
+            return True
+        transcript = s_dir / ".system_generated" / "logs" / "transcript.jsonl"
+        if transcript.exists():
+            try:
+                with open(transcript, "r", encoding="utf-8", errors="ignore") as f:
+                    for _ in range(10):
+                        line = f.readline()
+                        if not line:
+                            break
+                        if "locpipe_agy_prompt_" in line or "locpipe" in line.lower():
+                            return True
+            except OSError:
+                pass
+        return False
+
+    def _is_locpipe_db(db_p: Path) -> bool:
+        if "locpipe" in db_p.name.lower():
+            return True
+        try:
+            with open(db_p, "rb") as f:
+                chunk = f.read(65536)
+                if b"locpipe_agy_prompt_" in chunk or b"locpipe" in chunk.lower():
+                    return True
+        except OSError:
+            pass
+        return False
+
+    def _delete_summary(session_id: str) -> None:
+        if summaries_db.exists():
+            try:
+                import sqlite3
+                with sqlite3.connect(str(summaries_db), timeout=5) as conn:
+                    conn.execute("DELETE FROM conversation_summaries WHERE conversation_id = ?", (session_id,))
+                    conn.commit()
+            except Exception:
+                pass
 
     if brain_dir.is_dir():
         for session_dir in brain_dir.iterdir():
@@ -96,6 +136,8 @@ def sweep_orphaned_agy_artifacts(max_age_s: int = 3600) -> Dict[str, int]:
                 continue
             try:
                 if time.time() - session_dir.stat().st_mtime > max_age_s:
+                    if not _is_locpipe_session_dir(session_dir):
+                        continue
                     session_id = session_dir.name
                     shutil.rmtree(session_dir, ignore_errors=True)
                     removed_sessions += 1
@@ -111,6 +153,7 @@ def sweep_orphaned_agy_artifacts(max_age_s: int = 3600) -> Dict[str, int]:
                                         extra.unlink()
                             except OSError:
                                 pass
+                    _delete_summary(session_id)
             except OSError:
                 pass
 
@@ -118,6 +161,8 @@ def sweep_orphaned_agy_artifacts(max_age_s: int = 3600) -> Dict[str, int]:
         for db_file in conv_dir.glob("*.db"):
             try:
                 if time.time() - db_file.stat().st_mtime > max_age_s:
+                    if not _is_locpipe_db(db_file):
+                        continue
                     session_id = db_file.stem
                     db_file.unlink()
                     removed_dbs += 1
@@ -127,6 +172,7 @@ def sweep_orphaned_agy_artifacts(max_age_s: int = 3600) -> Dict[str, int]:
                                 extra.unlink()
                             except OSError:
                                 pass
+                    _delete_summary(session_id)
             except OSError:
                 pass
 

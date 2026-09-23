@@ -26,34 +26,52 @@ def test_sweep_orphaned_agy_artifacts_with_conversations(monkeypatch):
         stale_time = now - 7200  # 2 hours old
         fresh_time = now - 100   # 100 seconds old
 
-        # 1. Stale session 1: has both brain dir and conversation DB + wal + shm
-        sess1_brain = brain_dir / "session_stale_1"
+        # 1. Stale locpipe session 1: has both brain dir and conversation DB + wal + shm
+        sess1_brain = brain_dir / "session_locpipe_stale_1"
         sess1_brain.mkdir()
+        logs_dir = sess1_brain / ".system_generated" / "logs"
+        logs_dir.mkdir(parents=True)
+        (logs_dir / "transcript.jsonl").write_text('{"content":"locpipe_agy_prompt_stale.txt"}')
         os.utime(sess1_brain, (stale_time, stale_time))
 
-        sess1_db = conv_dir / "session_stale_1.db"
-        sess1_wal = conv_dir / "session_stale_1.db-wal"
-        sess1_shm = conv_dir / "session_stale_1.db-shm"
-        sess1_db.write_text("dummy db")
+        sess1_db = conv_dir / "session_locpipe_stale_1.db"
+        sess1_wal = conv_dir / "session_locpipe_stale_1.db-wal"
+        sess1_shm = conv_dir / "session_locpipe_stale_1.db-shm"
+        sess1_db.write_text("locpipe_agy_prompt_dummy db")
         sess1_wal.write_text("dummy wal")
         sess1_shm.write_text("dummy shm")
         os.utime(sess1_db, (stale_time, stale_time))
 
-        # 2. Stale session 2: orphaned conversation DB without a brain folder
-        sess2_db = conv_dir / "session_stale_2_nobrain.db"
-        sess2_db.write_text("dummy db 2")
+        # 2. Stale locpipe session 2: orphaned conversation DB without a brain folder
+        sess2_db = conv_dir / "session_locpipe_stale_2_nobrain.db"
+        sess2_db.write_text("locpipe_agy_prompt_dummy db 2")
         os.utime(sess2_db, (stale_time, stale_time))
 
-        # 3. Fresh session 3: active, should NOT be removed
-        sess3_brain = brain_dir / "session_fresh_3"
+        # 3. Fresh locpipe session 3: active, should NOT be removed
+        sess3_brain = brain_dir / "session_locpipe_fresh_3"
         sess3_brain.mkdir()
+        logs3_dir = sess3_brain / ".system_generated" / "logs"
+        logs3_dir.mkdir(parents=True)
+        (logs3_dir / "transcript.jsonl").write_text('{"content":"locpipe_agy_prompt_fresh.txt"}')
         os.utime(sess3_brain, (fresh_time, fresh_time))
 
-        sess3_db = conv_dir / "session_fresh_3.db"
-        sess3_db.write_text("fresh db")
+        sess3_db = conv_dir / "session_locpipe_fresh_3.db"
+        sess3_db.write_text("locpipe fresh db")
         os.utime(sess3_db, (fresh_time, fresh_time))
 
-        # 4. Temp prompt files
+        # 4. Stale USER session: MUST NOT be removed even though > 2 hours old!
+        user_stale_brain = brain_dir / "user_stale_coding_chat"
+        user_stale_brain.mkdir()
+        user_logs = user_stale_brain / ".system_generated" / "logs"
+        user_logs.mkdir(parents=True)
+        (user_logs / "transcript.jsonl").write_text('{"content":"Please help me write a Python script"}')
+        os.utime(user_stale_brain, (stale_time, stale_time))
+
+        user_stale_db = conv_dir / "user_stale_coding_chat.db"
+        user_stale_db.write_text("user sqlite db content without any proprietary keywords")
+        os.utime(user_stale_db, (stale_time, stale_time))
+
+        # 5. Temp prompt files
         stale_temp = Path(tmp_temp) / "locpipe_agy_prompt_stale.txt"
         stale_temp.write_text("prompt")
         os.utime(stale_temp, (stale_time, stale_time))
@@ -68,7 +86,7 @@ def test_sweep_orphaned_agy_artifacts_with_conversations(monkeypatch):
         assert res["removed_sessions"] == 1
         assert res["removed_conversation_dbs"] == 2
 
-        # Check that stale artifacts were unlinked
+        # Check that stale locpipe artifacts were unlinked
         assert not sess1_brain.exists()
         assert not sess1_db.exists()
         assert not sess1_wal.exists()
@@ -80,6 +98,10 @@ def test_sweep_orphaned_agy_artifacts_with_conversations(monkeypatch):
         assert sess3_brain.exists()
         assert sess3_db.exists()
         assert fresh_temp.exists()
+
+        # CRITICAL SAFETY CHECK: Verify user session was NOT deleted!
+        assert user_stale_brain.exists()
+        assert user_stale_db.exists()
 
 
 def test_load_glossary_json_bare_list(tmp_path):
